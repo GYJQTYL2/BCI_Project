@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>频段实时监测 · BCI</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1017; color: #e0e0e0;
+    }
+
+    /* 独立页顶栏（嵌入时隐藏） */
+    #topbar {
+      display: flex; align-items: center; gap: 14px;
+      padding: 11px 24px; background: #161b27; border-bottom: 1px solid #252b3d;
+    }
+    #topbar h1 { font-size: 14px; font-weight: 600; flex: 1; }
+    #status-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #e05252;
+      box-shadow: 0 0 5px #e05252; transition: all 0.3s;
+    }
+    #status-dot.connected { background: #44e888; box-shadow: 0 0 7px #44e888; }
+    #status-text { font-size: 11px; color: #6a7090; }
+    #back-link {
+      font-size: 11px; color: #5a6080; text-decoration: none; margin-left: 4px;
+      padding: 4px 10px; border: 1px solid #252b3d; border-radius: 4px;
+    }
+    #back-link:hover { color: #a0aabf; border-color: #3a4060; }
+
+    /* 嵌入模式：隐藏独立页顶栏 */
+    body.embedded #topbar { display: none; }
+
+    /* 工具栏（通道选择） */
+    #toolbar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 24px; background: #0f131e; border-bottom: 1px solid #1e2538;
+    }
+    #toolbar span { font-size: 11px; color: #5a6080; margin-right: 2px; }
+    .ch-btn {
+      padding: 3px 12px; border-radius: 4px; border: 1px solid #2e3650;
+      background: #1a2035; color: #8090b0; font-size: 11px; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ch-btn.active { background: #253060; color: #7eb8f7; border-color: #4a6090; }
+    .ch-btn:hover:not(.active) { background: #1e2640; color: #c0c8dc; }
+
+    /* 频段数值卡片 */
+    #band-cards {
+      display: flex; gap: 10px; padding: 12px 24px 10px;
+    }
+    .band-card {
+      flex: 1; background: #161b27; border: 1px solid #252b3d;
+      border-radius: 7px; padding: 10px 14px;
+    }
+    .band-header { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+    .band-name  { font-size: 12px; font-weight: 600; }
+    .band-range { font-size: 10px; color: #5a6080; }
+    .band-value {
+      font-size: 18px; font-weight: 600; line-height: 1.2;
+      font-variant-numeric: tabular-nums; letter-spacing: -0.3px;
+    }
+    .band-unit { font-size: 10px; color: #5a6080; margin-top: 1px; }
+    .band-bar-bg   { height: 3px; background: #1e2538; border-radius: 2px; margin-top: 6px; }
+    .band-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s; width: 0%; }
+
+    /* 图表区 */
+    .chart-section { padding: 12px 24px 4px; }
+    .chart-section:last-child { padding-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>BCI 频段实时功率监测</h1>
+  <div id="status-dot"></div>
+  <span id="status-text">未连接</span>
+  <a href="/" id="back-link">← 主界面</a>
+</div>
+
+<div id="toolbar">
+  <span>通道：</span>
+  <button class="ch-btn active" onclick="selectCh('avg')">均值</button>
+  <button class="ch-btn" onclick="selectCh('CH1')">CH1</button>
+  <button class="ch-btn" onclick="selectCh('CH2')">CH2</button>
+  <button class="ch-btn" onclick="selectCh('CH3')">CH3</button>
+  <button class="ch-btn" onclick="selectCh('CH4')">CH4</button>
+</div>
+
+<div id="band-cards">
+  <div class="band-card">
+    <div class="band-header">
+      <span class="band-name" style="color:#7986cb;">δ Delta</span>
+      <span class="band-range">0.5–4 Hz</span>
+    </div>
+    <div class="band-value" id="val-delta" style="color:#7986cb;">--</div>
+    <div class="band-unit">μV²/Hz</div>
+    <div class="band-bar-bg"><div class="band-bar-fill" id="bar-delta" style="background:#7986cb;"></div></div>
+  </div>
+  <div class="band-card">
+    <div class="band-header">
+      <span class="band-name" style="color:#4db6ac;">θ Theta</span>
+      <span class="band-range">4–8 Hz</span>
+    </div>
+    <div class="band-value" id="val-theta" style="color:#4db6ac;">--</div>
+    <div class="band-unit">μV²/Hz</div>
+    <div class="band-bar-bg"><div class="band-bar-fill" id="bar-theta" style="background:#4db6ac;"></div></div>
+  </div>
+  <div class="band-card">
+    <div class="band-header">
+      <span class="band-name" style="color:#81c784;">α Alpha</span>
+      <span class="band-range">8–13 Hz</span>
+    </div>
+    <div class="band-value" id="val-alpha" style="color:#81c784;">--</div>
+    <div class="band-unit">μV²/Hz</div>
+    <div class="band-bar-bg"><div class="band-bar-fill" id="bar-alpha" style="background:#81c784;"></div></div>
+  </div>
+  <div class="band-card">
+    <div class="band-header">
+      <span class="band-name" style="color:#ffb74d;">β Beta</span>
+      <span class="band-range">13–30 Hz</span>
+    </div>
+    <div class="band-value" id="val-beta" style="color:#ffb74d;">--</div>
+    <div class="band-unit">μV²/Hz</div>
+    <div class="band-bar-bg"><div class="band-bar-fill" id="bar-beta" style="background:#ffb74d;"></div></div>
+  </div>
+  <div class="band-card">
+    <div class="band-header">
+      <span class="band-name" style="color:#e57373;">γ Gamma</span>
+      <span class="band-range">30–45 Hz</span>
+    </div>
+    <div class="band-value" id="val-gamma" style="color:#e57373;">--</div>
+    <div class="band-unit">μV²/Hz</div>
+    <div class="band-bar-bg"><div class="band-bar-fill" id="bar-gamma" style="background:#e57373;"></div></div>
+  </div>
+</div>
+
+<!-- 折线图：频段功率随时间变化 -->
+<div class="chart-section">
+  <div id="chart-feat-bands" style="height:380px;width:100%;"></div>
+</div>
+
+<!-- 柱状图：当前 epoch 各通道对比 -->
+<div class="chart-section">
+  <div id="chart-feat-bar" style="height:340px;width:100%;"></div>
+</div>
+
+<script>
+const WS_URL      = `ws://${location.host}/ws`;
+const BANDS       = ["delta","theta","alpha","beta","gamma"];
+const CHANNELS    = ["CH1","CH2","CH3","CH4"];
+const BAND_COLORS = { delta:"#7986cb", theta:"#4db6ac", alpha:"#81c784", beta:"#ffb74d", gamma:"#e57373" };
+const BAND_LABELS = { delta:"δ Delta (0.5-4 Hz)", theta:"θ Theta (4-8 Hz)",
+                      alpha:"α Alpha (8-13 Hz)", beta:"β Beta (13-30 Hz)", gamma:"γ Gamma (30-45 Hz)" };
+
+// 嵌入模式
+if (new URLSearchParams(location.search).get("embedded") === "1") {
+  document.body.classList.add("embedded");
+}
+
+let currentCh = "avg";
+let _snap = null;
+
+// ── 通道切换 ─────────────────────────────────────────────────────────────────
+function selectCh(ch) {
+  currentCh = ch;
+  document.querySelectorAll(".ch-btn").forEach(btn => {
+    const label = btn.textContent.trim();
+    btn.classList.toggle("active", label === (ch === "avg" ? "均值" : ch));
+  });
+  if (_snap?.features) renderAll(_snap.features);
+}
+
+// ── 获取指定频段的时间序列（支持均值 / 单通道）────────────────────────────
+function getBandSeries(feats, band) {
+  const ts = feats.timestamps ?? [];
+  const n  = ts.length;
+  if (!n) return { x: [], y: [] };
+
+  if (currentCh === "avg") {
+    const y = new Array(n).fill(0);
+    let cnt = 0;
+    CHANNELS.forEach(ch => {
+      const arr = feats[ch]?.[band];
+      if (!arr?.length) return;
+      cnt++;
+      for (let i = 0; i < n; i++) y[i] += (arr[i] ?? 0);
+    });
+    return { x: ts, y: cnt ? y.map(v => v / cnt) : y };
+  }
+  return { x: ts, y: feats[currentCh]?.[band] ?? new Array(n).fill(0) };
+}
+
+// ── Plotly 布局工厂 ──────────────────────────────────────────────────────────
+function makeLayout(xLabel, yLabel, extra) {
+  return Object.assign({
+    paper_bgcolor: "#1a1f30", plot_bgcolor: "#141828",
+    font: { color: "#c0c8dc", size: 12 },
+    showlegend: true,
+    legend: { orientation: "v", x: 1.02, xanchor: "left", y: 1, yanchor: "top",
+              font: { size: 11, color: "#c0c8dc" }, bgcolor: "rgba(0,0,0,0)" },
+    margin: { l: 80, r: 150, t: 10, b: 50 },
+    xaxis: {
+      color: "#8090b0", gridcolor: "#1e2538", zerolinecolor: "#252b3d",
+      tickfont: { size: 11, color: "#8090b0" },
+      title: { text: xLabel, font: { size: 13, color: "#c0ceee" }, standoff: 10 },
+    },
+    yaxis: {
+      color: "#8090b0", gridcolor: "#1e2538", zerolinecolor: "#252b3d",
+      tickfont: { size: 11, color: "#8090b0" },
+      title: { text: yLabel, font: { size: 13, color: "#c0ceee" }, standoff: 10 },
+    },
+  }, extra || {});
+}
+
+const LAYOUT_LINE = makeLayout("时间 (HH:MM:SS.mmm)", "功率 (μV²/Hz)");
+const LAYOUT_BAR  = makeLayout("电极通道", "功率 (μV²/Hz)", { barmode: "group" });
+
+// ── 初始化图表 ────────────────────────────────────────────────────────────────
+const CFG = { responsive: true, displayModeBar: false };
+
+Plotly.newPlot("chart-feat-bands",
+  BANDS.map(band => ({
+    x: [], y: [], type: "scatter", mode: "lines+markers",
+    name: BAND_LABELS[band],
+    line: { color: BAND_COLORS[band], width: 2 },
+    marker: { color: BAND_COLORS[band], size: 4 },
+    connectgaps: false,
+  })),
+  LAYOUT_LINE, CFG
+);
+
+Plotly.newPlot("chart-feat-bar",
+  BANDS.map(band => ({
+    x: CHANNELS, y: [0, 0, 0, 0], type: "bar",
+    name: BAND_LABELS[band], marker: { color: BAND_COLORS[band] },
+  })),
+  LAYOUT_BAR, CFG
+);
+
+// ── 渲染：折线图 + 柱状图 + 数值卡片 ────────────────────────────────────────
+function fmtPower(v) {
+  if (v == null || isNaN(v)) return "--";
+  if (v >= 100)   return v.toFixed(1);
+  if (v >= 1)     return v.toFixed(3);
+  if (v >= 0.001) return v.toFixed(4);
+  return v.toExponential(2);
+}
+
+// 调用 react 前把用户对图例的 visible 操作保留下来
+function keepVisible(chartId, traces) {
+  const el = document.getElementById(chartId);
+  if (el?.data?.length === traces.length) {
+    traces.forEach((t, i) => {
+      const v = el.data[i].visible;
+      if (v === false || v === "legendonly") t.visible = v;
+    });
+  }
+  return traces;
+}
+
+function renderAll(feats) {
+  if (!feats?.timestamps?.length) return;
+
+  // 折线图
+  Plotly.react("chart-feat-bands",
+    keepVisible("chart-feat-bands", BANDS.map(band => {
+      const { x, y } = getBandSeries(feats, band);
+      return {
+        x, y, type: "scatter", mode: "lines+markers",
+        name: BAND_LABELS[band],
+        line: { color: BAND_COLORS[band], width: 2 },
+        marker: { color: BAND_COLORS[band], size: 4 },
+        connectgaps: false,
+      };
+    })),
+    LAYOUT_LINE, CFG
+  );
+
+  // 柱状图（取最新一个 epoch 的各通道数值）
+  Plotly.react("chart-feat-bar",
+    keepVisible("chart-feat-bar", BANDS.map(band => ({
+      x: CHANNELS,
+      y: CHANNELS.map(ch => { const a = feats[ch]?.[band]; return a?.length ? a[a.length - 1] : 0; }),
+      type: "bar", name: BAND_LABELS[band], marker: { color: BAND_COLORS[band] },
+    }))),
+    LAYOUT_BAR, CFG
+  );
+
+  // 数值卡片
+  const latest = {};
+  BANDS.forEach(band => {
+    const { y } = getBandSeries(feats, band);
+    latest[band] = y?.length ? y[y.length - 1] : 0;
+  });
+  const maxVal = Math.max(...Object.values(latest), 1e-9);
+  BANDS.forEach(band => {
+    const v = latest[band];
+    const el  = document.getElementById(`val-${band}`);
+    const bar = document.getElementById(`bar-${band}`);
+    if (el)  el.textContent = fmtPower(v);
+    if (bar) bar.style.width = `${Math.min(100, (v / maxVal) * 100).toFixed(1)}%`;
+  });
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+let ws = null, reconnectTimer = null;
+
+function setStatus(ok) {
+  const dot  = document.getElementById("status-dot");
+  const text = document.getElementById("status-text");
+  if (dot)  dot.classList.toggle("connected", ok);
+  if (text) text.textContent = ok ? "实时采集中" : "未连接，尝试重连…";
+}
+
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen  = () => { setStatus(true);  clearTimeout(reconnectTimer); };
+  ws.onclose = () => { setStatus(false); reconnectTimer = setTimeout(connect, 3000); };
+  ws.onerror = () => ws.close();
+  ws.onmessage = evt => {
+    let d; try { d = JSON.parse(evt.data); } catch { return; }
+    _snap = d;
+    if (d.features) renderAll(d.features);
+  };
+}
+
+connect();
+</script>
+</body>
+</html>

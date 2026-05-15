@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>历史数据查看 · BCI</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1017; color: #e0e0e0; height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* ── 顶栏 ── */
+    #topbar {
+      display: flex; align-items: center; gap: 14px;
+      padding: 11px 24px; background: #161b27;
+      border-bottom: 1px solid #252b3d; flex-shrink: 0;
+    }
+    #topbar h1 { font-size: 14px; font-weight: 600; flex: 1; }
+    #topbar a {
+      font-size: 11px; color: #5a6080; text-decoration: none;
+      padding: 4px 10px; border: 1px solid #252b3d; border-radius: 4px;
+    }
+    #topbar a:hover { color: #a0aabf; border-color: #3a4060; }
+
+    /* ── 控制栏 ── */
+    #controls {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+      padding: 10px 24px; background: #0f131e;
+      border-bottom: 1px solid #1e2538; flex-shrink: 0;
+    }
+    .ctrl-group { display: flex; align-items: center; gap: 6px; }
+    .ctrl-label { font-size: 11px; color: #5a6080; white-space: nowrap; }
+    select, input[type="datetime-local"] {
+      background: #1a2035; color: #c0c8dc;
+      border: 1px solid #2e3650; border-radius: 4px;
+      padding: 4px 8px; font-size: 11px;
+    }
+    select { min-width: 180px; }
+    input[type="datetime-local"] { min-width: 170px; }
+    select:focus, input:focus { outline: none; border-color: #4a6090; }
+    #btn-load {
+      padding: 5px 18px; border-radius: 4px; border: none;
+      background: #253060; color: #7eb8f7; font-size: 12px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    #btn-load:hover { background: #304080; }
+    #btn-load:disabled { opacity: 0.4; cursor: default; }
+    #load-status { font-size: 11px; color: #5a6080; }
+
+    /* ── 数据类型标签页 ── */
+    #type-tabs {
+      display: flex; padding: 0 24px;
+      background: #161b27; border-bottom: 2px solid #252b3d; flex-shrink: 0;
+    }
+    .type-tab {
+      padding: 9px 22px; cursor: pointer; font-size: 12px; font-weight: 500;
+      color: #5a6080; border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: all 0.15s;
+    }
+    .type-tab.active { color: #7eb8f7; border-bottom-color: #7eb8f7; }
+    .type-tab:hover:not(.active) { color: #a0aabf; background: #1c2233; }
+    .type-tab.disabled { color: #3a4060; cursor: default; pointer-events: none; }
+
+    /* ── 图表区 ── */
+    #chart-area {
+      flex: 1; overflow-y: auto; padding: 16px 24px 24px;
+    }
+    .chart-block { margin-bottom: 20px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── 空态 ── */
+    #empty-hint {
+      display: flex; align-items: center; justify-content: center;
+      height: 300px; color: #3a4060; font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- 顶栏 -->
+<div id="topbar">
+  <h1>BCI 历史数据查看</h1>
+  <a href="/">← 实时监测</a>
+</div>
+
+<!-- 控制栏 -->
+<div id="controls">
+  <div class="ctrl-group">
+    <span class="ctrl-label">会话：</span>
+    <select id="sel-session">
+      <option value="">-- 加载中 --</option>
+    </select>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">开始：</span>
+    <input type="datetime-local" id="inp-start" step="1" />
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">结束：</span>
+    <input type="datetime-local" id="inp-end" step="1" />
+  </div>
+  <button id="btn-load" onclick="loadData()">加载</button>
+  <span id="load-status"></span>
+</div>
+
+<!-- 数据类型标签页 -->
+<div id="type-tabs">
+  <div class="type-tab active" data-type="raw"       onclick="switchType('raw')">原始 EEG</div>
+  <div class="type-tab"        data-type="processed" onclick="switchType('processed')">预处理 EEG</div>
+  <div class="type-tab"        data-type="features"  onclick="switchType('features')">特征分析</div>
+  <div class="type-tab"        data-type="attention" onclick="switchType('attention')">注意力分析</div>
+</div>
+
+<!-- 图表区 -->
+<div id="chart-area">
+  <div id="empty-hint">请选择会话和时间范围后点击「加载」</div>
+
+  <!-- 原始 EEG -->
+  <div id="panel-raw" class="panel">
+    <div class="chart-block"><div id="chart-raw" style="height:460px;"></div></div>
+  </div>
+
+  <!-- 预处理 EEG -->
+  <div id="panel-processed" class="panel">
+    <div class="chart-block"><div id="chart-processed" style="height:460px;"></div></div>
+  </div>
+
+  <!-- 特征分析 -->
+  <div id="panel-features" class="panel">
+    <div class="chart-block"><div id="chart-feat-line" style="height:380px;"></div></div>
+    <div class="chart-block"><div id="chart-feat-bar"  style="height:320px;"></div></div>
+  </div>
+
+  <!-- 注意力分析 -->
+  <div id="panel-attention" class="panel">
+    <div class="chart-block"><div id="chart-attn-score"   style="height:260px;"></div></div>
+    <div class="chart-block"><div id="chart-attn-indices" style="height:260px;"></div></div>
+    <div class="chart-block"><div id="chart-attn-bands"   style="height:260px;"></div></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// 常量
+// ═══════════════════════════════════════════════════════════════════
+const CHANNELS   = ["CH1","CH2","CH3","CH4"];
+const RAW_CH     = ["ch_1","ch_2","ch_3","ch_4"];
+const BANDS      = ["delta","theta","alpha","beta","gamma"];
+const CH_COLORS  = ["#4fc3f7","#81c784","#ffb74d","#e57373"];
+const BAND_COLORS = { delta:"#7986cb", theta:"#4db6ac", alpha:"#81c784", beta:"#ffb74d", gamma:"#e57373" };
+const BAND_LABELS = { delta:"δ Delta (0.5-4 Hz)", theta:"θ Theta (4-8 Hz)", alpha:"α Alpha (8-13 Hz)", beta:"β Beta (13-30 Hz)", gamma:"γ Gamma (30-45 Hz)" };
+const OFFSET_SCALE = 150;
+const CFG = { responsive: true, displayModeBar: false };
+
+// ═══════════════════════════════════════════════════════════════════
+// 状态
+// ═══════════════════════════════════════════════════════════════════
+let _sessions    = [];
+let _currentType = "raw";
+let _chartsInited = {};   // 记录哪些 panel 的图表已初始化
+
+// ═══════════════════════════════════════════════════════════════════
+// Plotly 布局工厂
+// ═══════════════════════════════════════════════════════════════════
+function makeLayout(title, xLabel, yLabel, extra) {
+  return Object.assign({
+    paper_bgcolor: "#1a1f30", plot_bgcolor: "#141828",
+    font: { color: "#c0c8dc", size: 12 },
+    title: { text: title, font: { size: 13, color: "#e0e8ff" }, x: 0.5, xanchor: "center", pad: { t: 6 } },
+    showlegend: true,
+    legend: { orientation: "v", x: 1.02, xanchor: "left", y: 1, yanchor: "top",
+              font: { size: 11, color: "#c0c8dc" }, bgcolor: "rgba(0,0,0,0)" },
+    margin: { l: 80, r: 150, t: 50, b: 55 },
+    xaxis: {
+      color: "#8090b0", gridcolor: "#1e2538", zerolinecolor: "#252b3d",
+      tickfont: { size: 11, color: "#8090b0" },
+      title: { text: xLabel, font: { size: 12, color: "#c0ceee" }, standoff: 12 },
+    },
+    yaxis: {
+      color: "#8090b0", gridcolor: "#1e2538", zerolinecolor: "#252b3d",
+      tickfont: { size: 11, color: "#8090b0" },
+      title: { text: yLabel, font: { size: 12, color: "#c0ceee" }, standoff: 12 },
+    },
+  }, extra || {});
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 图表初始化（懒加载，切到对应 panel 时才初始化）
+// ═══════════════════════════════════════════════════════════════════
+function ensureCharts(type) {
+  if (_chartsInited[type]) return;
+  _chartsInited[type] = true;
+
+  if (type === "raw") {
+    Plotly.newPlot("chart-raw",
+      RAW_CH.map((ch, i) => ({ x:[], y:[], mode:"lines", name:ch,
+        line:{ color:CH_COLORS[i], width:1 }, type:"scatter" })),
+      makeLayout("原始脑电波 · ch_1 ~ ch_4", "时间 (HH:MM:SS.mmm)",
+                 "电压 (μV) · 各通道偏移 " + OFFSET_SCALE + " μV"), CFG);
+  }
+  else if (type === "processed") {
+    Plotly.newPlot("chart-processed",
+      CHANNELS.map((ch, i) => ({ x:[], y:[], mode:"lines", name:ch,
+        line:{ color:CH_COLORS[i], width:1 }, type:"scatter" })),
+      makeLayout("预处理脑电波 · CH1 ~ CH4", "时间 (HH:MM:SS.mmm)",
+                 "幅值 (z-score) · 各通道偏移 " + OFFSET_SCALE), CFG);
+  }
+  else if (type === "features") {
+    Plotly.newPlot("chart-feat-line",
+      BANDS.map(b => ({ x:[], y:[], mode:"lines+markers", name:BAND_LABELS[b],
+        line:{ color:BAND_COLORS[b], width:2 }, marker:{ size:4, color:BAND_COLORS[b] },
+        type:"scatter" })),
+      makeLayout("各频段功率趋势 · 四通道均值", "时间 (HH:MM:SS.mmm)", "功率 (μV²/Hz)"), CFG);
+    Plotly.newPlot("chart-feat-bar",
+      BANDS.map(b => ({ x:CHANNELS, y:[0,0,0,0], type:"bar", name:BAND_LABELS[b],
+        marker:{ color:BAND_COLORS[b] } })),
+      makeLayout("最后一个 epoch 各频段 · 分通道", "电极通道", "功率 (μV²/Hz)",
+                 { barmode:"group", margin:{ l:80, r:150, t:50, b:55 } }), CFG);
+  }
+  else if (type === "attention") {
+    Plotly.newPlot("chart-attn-score",
+      [{ x:[], y:[], mode:"lines", name:"注意力得分",
+         line:{ color:"#7eb8f7", width:2 }, type:"scatter" }],
+      makeLayout("注意力得分趋势", "时间 (HH:MM:SS.mmm)", "得分",
+                 { yaxis:{ range:[0,1], color:"#8090b0", gridcolor:"#1e2538",
+                           zerolinecolor:"#252b3d",
+                           tickfont:{ size:11, color:"#8090b0" },
+                           title:{ text:"得分", font:{ size:12, color:"#c0ceee" }, standoff:12 } } }), CFG);
+    Plotly.newPlot("chart-attn-indices",
+      [
+        { x:[], y:[], mode:"lines", name:"参与度指数 EI β/(α+θ)",
+          line:{ color:"#ffb74d", width:2 }, type:"scatter" },
+        { x:[], y:[], mode:"lines", name:"θ/α 比值",
+          line:{ color:"#e57373", width:2 }, type:"scatter" },
+      ],
+      makeLayout("注意力原始指数趋势", "时间 (HH:MM:SS.mmm)", "指数值"), CFG);
+    Plotly.newPlot("chart-attn-bands",
+      BANDS.map(b => ({ x:[], y:[], mode:"lines+markers", name:BAND_LABELS[b],
+        line:{ color:BAND_COLORS[b], width:2 }, marker:{ size:4, color:BAND_COLORS[b] },
+        type:"scatter" })),
+      makeLayout("频段功率趋势 · 四通道均值", "时间 (HH:MM:SS.mmm)", "功率 (μV²/Hz)"), CFG);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 渲染函数
+// ═══════════════════════════════════════════════════════════════════
+function renderEEG(divId, channels, data) {
+  if (!data?.timestamps?.length) return;
+  Plotly.react(divId,
+    channels.map((ch, i) => ({
+      x: data.timestamps,
+      y: (data[ch] || []).map(v => v + i * OFFSET_SCALE),
+      mode:"lines", name:ch, line:{ color:CH_COLORS[i], width:1 }, type:"scatter",
+    }))
+  );
+}
+
+function renderFeatures(data) {
+  if (!data?.timestamps?.length) return;
+  const ts = data.timestamps, n = ts.length;
+
+  // 折线图：四通道均值
+  Plotly.react("chart-feat-line",
+    BANDS.map(band => {
+      const y = new Array(n).fill(0);
+      let cnt = 0;
+      CHANNELS.forEach(ch => {
+        const arr = data[ch]?.[band];
+        if (!arr?.length) return;
+        cnt++;
+        for (let i = 0; i < n; i++) y[i] += arr[i] ?? 0;
+      });
+      return { x: ts, y: cnt ? y.map(v => v/cnt) : y,
+               mode:"lines+markers", name:BAND_LABELS[band],
+               line:{ color:BAND_COLORS[band], width:2 },
+               marker:{ size:4, color:BAND_COLORS[band] }, type:"scatter" };
+    })
+  );
+
+  // 柱状图：最后一个 epoch
+  Plotly.react("chart-feat-bar",
+    BANDS.map(band => ({
+      x: CHANNELS,
+      y: CHANNELS.map(ch => { const a = data[ch]?.[band]; return a?.length ? a[a.length-1] : 0; }),
+      type:"bar", name:BAND_LABELS[band], marker:{ color:BAND_COLORS[band] },
+    }))
+  );
+}
+
+function renderAttention(data) {
+  if (!data?.timestamps?.length) return;
+  const ts = data.timestamps;
+
+  Plotly.react("chart-attn-score", [{
+    x: ts, y: data.attention_score || [],
+    mode:"lines", name:"注意力得分",
+    line:{ color:"#7eb8f7", width:2 }, type:"scatter",
+  }]);
+
+  Plotly.react("chart-attn-indices", [
+    { x: ts, y: data.engagement_index || [], mode:"lines",
+      name:"参与度指数 EI β/(α+θ)", line:{ color:"#ffb74d", width:2 }, type:"scatter" },
+    { x: ts, y: data.theta_alpha_ratio || [], mode:"lines",
+      name:"θ/α 比值", line:{ color:"#e57373", width:2 }, type:"scatter" },
+  ]);
+
+  // 注意力面板的频段功率（若有特征数据可复用，此处绑定 attention 响应中不包含频段，留空）
+  // 若需要同步显示频段，可额外请求 features 数据
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Session 管理
+// ═══════════════════════════════════════════════════════════════════
+function tsToDatetimeLocal(ts) {
+  if (!ts) return "";
+  const d = new Date(ts * 1000);
+  // format: YYYY-MM-DDTHH:mm:ss (datetime-local with seconds)
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` +
+         `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function datetimeLocalToTs(str) {
+  if (!str) return null;
+  return new Date(str).getTime() / 1000;
+}
+
+function onSessionChange() {
+  const sid = document.getElementById("sel-session").value;
+  const session = _sessions.find(s => s.session_id === sid);
+  if (!session) return;
+
+  document.getElementById("inp-start").value = tsToDatetimeLocal(session.start_ts);
+  document.getElementById("inp-end").value   = tsToDatetimeLocal(session.end_ts);
+
+  // 更新 tab 可用状态
+  document.querySelectorAll(".type-tab").forEach(tab => {
+    const t = tab.dataset.type;
+    const has = session.types?.includes(t);
+    tab.classList.toggle("disabled", !has);
+  });
+
+  // 切到第一个可用类型
+  const firstAvail = ["raw","processed","features","attention"]
+    .find(t => session.types?.includes(t));
+  if (firstAvail) switchType(firstAvail);
+}
+
+async function fetchSessions() {
+  try {
+    const res = await fetch("/history/sessions");
+    _sessions = await res.json();
+    const sel = document.getElementById("sel-session");
+    sel.innerHTML = _sessions.length
+      ? _sessions.map(s => `<option value="${s.session_id}">${s.display}</option>`).join("")
+      : `<option value="">（无可用会话）</option>`;
+    if (_sessions.length) onSessionChange();
+  } catch(e) {
+    document.getElementById("sel-session").innerHTML = `<option value="">（获取失败）</option>`;
+    console.error("fetchSessions:", e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 数据加载
+// ═══════════════════════════════════════════════════════════════════
+async function loadData() {
+  const sid   = document.getElementById("sel-session").value;
+  const start = datetimeLocalToTs(document.getElementById("inp-start").value);
+  const end   = datetimeLocalToTs(document.getElementById("inp-end").value);
+  const type  = _currentType;
+
+  if (!sid) { setStatus("请选择会话"); return; }
+
+  const btn = document.getElementById("btn-load");
+  btn.disabled = true;
+  setStatus("加载中…");
+
+  try {
+    const params = new URLSearchParams({ type, session: sid });
+    if (start != null) params.set("start", start);
+    if (end   != null) params.set("end",   end);
+
+    const res  = await fetch(`/history/data?${params}`);
+    const data = await res.json();
+
+    const pts = data?.timestamps?.length ?? 0;
+    if (!pts) { setStatus("该时间段内无数据"); btn.disabled = false; return; }
+
+    // 确保图表已初始化
+    ensureCharts(type);
+    document.getElementById("empty-hint").style.display = "none";
+
+    // 渲染
+    if      (type === "raw")       renderEEG("chart-raw",       RAW_CH,   data);
+    else if (type === "processed") renderEEG("chart-processed", CHANNELS, data);
+    else if (type === "features")  renderFeatures(data);
+    else if (type === "attention") renderAttention(data);
+
+    setStatus(`已加载 ${pts} 个数据点`);
+  } catch(e) {
+    setStatus("加载失败: " + e.message);
+    console.error("loadData:", e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Tab 切换
+// ═══════════════════════════════════════════════════════════════════
+function switchType(type) {
+  _currentType = type;
+  document.querySelectorAll(".type-tab").forEach(tab =>
+    tab.classList.toggle("active", tab.dataset.type === type));
+  document.querySelectorAll(".panel").forEach(p =>
+    p.classList.toggle("active", p.id === `panel-${type}`));
+}
+
+function setStatus(msg) {
+  document.getElementById("load-status").textContent = msg;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 初始化
+// ═══════════════════════════════════════════════════════════════════
+document.getElementById("sel-session").addEventListener("change", onSessionChange);
+fetchSessions();
+</script>
+</body>
+</html>

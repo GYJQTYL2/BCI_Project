@@ -1,0 +1,120 @@
+2026-05-11 18:19:02 - INFO - 程序启动，数据将保存到: /Users/admin/Downloads/BCIXmuse/BCI_Project/Xmuse-Connect/LSL/signal_data/20260511_181902
+2026-05-11 18:19:02 - INFO - 日志文件将保存到: /Users/admin/Downloads/BCIXmuse/BCI_Project/Xmuse-Connect/LSL/signal_data/20260511_181902/logs/collection_log_20260511_181902.log
+2026-05-11 18:19:02 - INFO - 
+--- 开始查找和初始化 LSL 数据流 ---
+2026-05-11 18:19:02 - INFO - 尝试查找 EEG 数据流...
+2026-05-11 18:19:06 - INFO - 已找到 EEG 数据流。
+2026-05-11 18:19:06 - INFO -   使用自定义通道名称: ['ch_1', 'ch_2', 'ch_3', 'ch_4']
+2026-05-11 18:19:06 - INFO -   EEG 流信息：通道数=4, 采样率=256.0 Hz
+2026-05-11 18:19:07 - INFO - [TimestampCorrector] 初始化完成 correction=-0.0001s  dejitter=True  refresh_interval=60.0s
+2026-05-11 18:19:07 - INFO -   EEG 数据将按每 60 秒一个 segment（默认）保存到: signal_data/20260511_181902
+2026-05-11 18:19:07 - INFO - 可视化面板已启动: http://localhost:8765
+2026-05-11 18:19:07 - INFO - 可视化面板: http://localhost:8765
+2026-05-11 18:19:07 - INFO - [HistoryAPI] 路由已注册: /history/sessions  /history/data
+2026-05-11 18:19:07 - INFO - 历史数据:   http://localhost:8765/history.html
+2026-05-11 18:19:07 - INFO - [TimestampCorrector] 初始化完成 correction=-0.0001s  dejitter=True  refresh_interval=60.0s
+2026-05-11 18:19:07 - INFO - RealTimeEEGProcessor 初始化: 输出→/Users/admin/Downloads/BCIXmuse/BCI_Project/Preprocess/signal_data/20260511_181907, 窗口=10.0s (2560 样本)
+2026-05-11 18:19:07 - INFO - RealTimeFeatureExtractor 初始化: 输出→/Users/admin/Downloads/BCIXmuse/BCI_Project/FeatureExtract/features_output/20260511_181907
+2026-05-11 18:19:07 - INFO - RealTimeAttentionDetector 初始化: smooth_window=5  输出→/Users/admin/Downloads/BCIXmuse/BCI_Project/Attention/attention_output/20260511_181907
+2026-05-11 18:19:07 - INFO -   EEG 实时处理器已启动，窗口=10.0s → /Users/admin/Downloads/BCIXmuse/BCI_Project/Preprocess/signal_data
+2026-05-11 18:19:07 - INFO -   EEG 实时特征提取器已启动，epoch=1.0s → /Users/admin/Downloads/BCIXmuse/BCI_Project/FeatureExtract/features_output
+2026-05-11 18:19:07 - INFO -   EEG 注意力检测器已启动，平滑窗口=5 epoch
+2026-05-11 18:19:07 - INFO - 
+--- 开始记录数据 ---
+2026-05-11 18:19:07 - INFO - 按 Ctrl+C 停止记录
+2026-05-11 18:19:19 - INFO - 127.0.0.1 [11/May/2026:18:19:19 +0800] "GET / HTTP/1.1" 304 178 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:19:19 - INFO - 127.0.0.1 [11/May/2026:18:19:11 +0800] "GET /ws HTTP/1.1" 101 0 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:19:19 - INFO - 127.0.0.1 [11/May/2026:18:19:11 +0800] "GET /ws HTTP/1.1" 101 0 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:19:19 - INFO - DataSaver 初始化: 88 个特征列
+2026-05-11 18:19:19 - INFO - DataSaver 初始化: 4 列
+2026-05-11 18:19:19 - INFO - 127.0.0.1 [11/May/2026:18:19:19 +0800] "GET /favicon.ico HTTP/1.1" 204 99 "http://localhost:8765/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:19:27 - INFO - 127.0.0.1 [11/May/2026:18:19:27 +0800] "GET /history.html HTTP/1.1" 304 178 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:19:27 - INFO - 127.0.0.1 [11/May/2026:18:19:27 +0800] "GET /favicon.ico HTTP/1.1" 204 99 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:19:27 - INFO - 127.0.0.1 [11/May/2026:18:19:27 +0800] "GET /history/sessions HTTP/1.1" 200 2743 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:19:45 - WARNING - [HistoryReader] 未找到 EEG_seg*.csv in signal_data/20260511_181902
+2026-05-11 18:19:45 - INFO - 127.0.0.1 [11/May/2026:18:19:45 +0800] "GET /history/data?type=raw&session=20260511_181902&start=1778235574&end=1778581181 HTTP/1.1" 200 191 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:19:47 - WARNING - [HistoryReader] 未找到 EEG_seg*.csv in signal_data/20260511_181902
+2026-05-11 18:19:47 - INFO - 127.0.0.1 [11/May/2026:18:19:47 +0800] "GET /history/data?type=raw&session=20260511_181902&start=1778235574&end=1778581181 HTTP/1.1" 200 191 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:19:48 - WARNING - [HistoryReader] 未找到 EEG_seg*.csv in signal_data/20260511_181902
+2026-05-11 18:19:48 - INFO - 127.0.0.1 [11/May/2026:18:19:48 +0800] "GET /history/data?type=raw&session=20260511_181902&start=1778235574&end=1778581181 HTTP/1.1" 200 191 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:20:02 - WARNING - [HistoryReader] 未找到 EEG_seg*.csv in signal_data/20260511_181902
+2026-05-11 18:20:02 - INFO - 127.0.0.1 [11/May/2026:18:20:02 +0800] "GET /history/data?type=raw&session=20260511_181902&start=1778235574&end=1778581181 HTTP/1.1" 200 191 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:20:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0000s
+2026-05-11 18:20:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0000s
+2026-05-11 18:20:21 - INFO - [DataSaver/EEG] segment 0001 → EEG_seg0001.csv  (15360 样本，累计 15360)
+2026-05-11 18:20:21 - INFO - [DataSaver/EEG_processed] segment 0001 → EEG_processed_seg0001.csv  (15360 样本，累计 15360)
+2026-05-11 18:20:21 - INFO - [DataSaver/features] segment 0001 → features_seg0001.csv  (60 样本，累计 60)
+2026-05-11 18:20:33 - INFO - [DataSaver/attention] segment 0001 → attention_seg0001.csv  (60 样本，累计 60)
+2026-05-11 18:21:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0001s
+2026-05-11 18:21:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0001s
+2026-05-11 18:21:34 - INFO - [DataSaver/EEG] segment 0002 → EEG_seg0002.csv  (15360 样本，累计 30720)
+2026-05-11 18:21:34 - INFO - [DataSaver/EEG_processed] segment 0002 → EEG_processed_seg0002.csv  (15360 样本，累计 30720)
+2026-05-11 18:21:35 - INFO - [DataSaver/features] segment 0002 → features_seg0002.csv  (60 样本，累计 120)
+2026-05-11 18:21:46 - INFO - [DataSaver/attention] segment 0002 → attention_seg0002.csv  (60 样本，累计 120)
+2026-05-11 18:22:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0000s
+2026-05-11 18:22:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0001s
+2026-05-11 18:22:48 - INFO - [DataSaver/EEG] segment 0003 → EEG_seg0003.csv  (15360 样本，累计 46080)
+2026-05-11 18:22:48 - INFO - [DataSaver/EEG_processed] segment 0003 → EEG_processed_seg0003.csv  (15360 样本，累计 46080)
+2026-05-11 18:22:48 - INFO - [DataSaver/features] segment 0003 → features_seg0003.csv  (60 样本，累计 180)
+2026-05-11 18:23:01 - INFO - [DataSaver/attention] segment 0003 → attention_seg0003.csv  (60 样本，累计 180)
+2026-05-11 18:23:05 - INFO - 127.0.0.1 [11/May/2026:18:23:05 +0800] "GET /history/sessions HTTP/1.1" 200 2808 "-" "curl/8.7.1"
+2026-05-11 18:23:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0000s
+2026-05-11 18:23:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0000s
+2026-05-11 18:23:17 - INFO - 127.0.0.1 [11/May/2026:18:23:17 +0800] "GET /history/data?type=raw&session=20260511_181902&start=1778235574&end=1778581181 HTTP/1.1" 200 167067 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:19 - INFO - 127.0.0.1 [11/May/2026:18:23:19 +0800] "GET /history/data?type=raw&session=20260511_181902&start=1778235574&end=1778581181 HTTP/1.1" 200 167067 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:28 - INFO - 127.0.0.1 [11/May/2026:18:23:28 +0800] "GET /history/data?type=raw&session=20260511_181902&start=1778235574&end=1778581181 HTTP/1.1" 200 167067 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:28 - INFO - 127.0.0.1 [11/May/2026:18:23:28 +0800] "GET /history/data?type=raw&session=20260511_181902&start=1778235574&end=1778581181 HTTP/1.1" 200 167067 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:28 - INFO - 127.0.0.1 [11/May/2026:18:23:28 +0800] "GET /history/data?type=raw&session=20260511_181902&start=1778235574&end=1778581181 HTTP/1.1" 200 167067 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:37 - INFO - 127.0.0.1 [11/May/2026:18:23:37 +0800] "GET /history.html HTTP/1.1" 200 238 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:40 - INFO - 127.0.0.1 [11/May/2026:18:23:40 +0800] "GET /favicon.ico HTTP/1.1" 204 99 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:40 - INFO - 127.0.0.1 [11/May/2026:18:23:40 +0800] "GET /history/sessions HTTP/1.1" 200 2808 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:46 - INFO - 127.0.0.1 [11/May/2026:18:23:46 +0800] "GET /history/data?type=raw&session=20260511_181902&start=1778494742&end=1778494968 HTTP/1.1" 200 167067 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:50 - INFO - 127.0.0.1 [11/May/2026:18:23:50 +0800] "GET /history/data?type=processed&session=20260511_181902&start=1778494742&end=1778494968 HTTP/1.1" 200 173050 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:53 - INFO - 127.0.0.1 [11/May/2026:18:23:53 +0800] "GET /history/data?type=features&session=20260511_181902&start=1778494742&end=1778494968 HTTP/1.1" 200 38928 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:23:55 - INFO - 127.0.0.1 [11/May/2026:18:23:55 +0800] "GET /history/data?type=attention&session=20260511_181902&start=1778494742&end=1778494968 HTTP/1.1" 200 9781 "http://localhost:8765/history.html" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+2026-05-11 18:24:01 - INFO - [DataSaver/EEG] segment 0004 → EEG_seg0004.csv  (15360 样本，累计 61440)
+2026-05-11 18:24:02 - INFO - [DataSaver/EEG_processed] segment 0004 → EEG_processed_seg0004.csv  (15360 样本，累计 61440)
+2026-05-11 18:24:02 - INFO - [DataSaver/features] segment 0004 → features_seg0004.csv  (60 样本，累计 240)
+2026-05-11 18:24:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0000s
+2026-05-11 18:24:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0000s
+2026-05-11 18:24:14 - INFO - [DataSaver/attention] segment 0004 → attention_seg0004.csv  (60 样本，累计 240)
+2026-05-11 18:25:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0001s
+2026-05-11 18:25:07 - INFO - [TimestampCorrector] 刷新 time_correction=-0.0001s
+2026-05-11 18:25:15 - INFO - [DataSaver/EEG] segment 0005 → EEG_seg0005.csv  (15360 样本，累计 76800)
+2026-05-11 18:25:15 - INFO - [DataSaver/EEG_processed] segment 0005 → EEG_processed_seg0005.csv  (15360 样本，累计 76800)
+2026-05-11 18:25:16 - INFO - [DataSaver/features] segment 0005 → features_seg0005.csv  (60 样本，累计 300)
+2026-05-11 18:25:28 - INFO - [DataSaver/attention] segment 0005 → attention_seg0005.csv  (60 样本，累计 300)
+2026-05-11 18:26:15 - ERROR - 发生意外错误: module 'pylsl' has no attribute 'timeout_error'
+Traceback (most recent call last):
+  File "/Users/admin/Downloads/BCIXmuse/BCI_Project/Xmuse-Connect/LSL/LSL-singal_device.py", line 274, in main
+    samples, lsl_timestamps = inlet_obj.pull_chunk(timeout=PULL_CHUNK_TIMEOUT, max_samples=max_samples_to_pull)
+  File "/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/site-packages/pylsl/inlet.py", line 253, in pull_chunk
+    num_elements = self.do_pull_chunk(
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/admin/Downloads/BCIXmuse/BCI_Project/Xmuse-Connect/LSL/LSL-singal_device.py", line 297, in main
+    except pylsl.timeout_error:
+AttributeError: module 'pylsl' has no attribute 'timeout_error'
+2026-05-11 18:26:15 - INFO - 
+--- 数据采集完成，正在保存剩余数据 ---
+2026-05-11 18:26:15 - INFO -   EEG 总共采集 85116 个样本
+2026-05-11 18:26:15 - INFO - [DataSaver/EEG] segment 0006 → EEG_seg0006.csv  (8316 样本，累计 85116)
+2026-05-11 18:26:15 - INFO - [DataSaver/EEG] 保存完毕，共 6 个 segment，85116 个样本
+2026-05-11 18:26:15 - INFO -   EEG 原始数据已保存到: /Users/admin/Downloads/BCIXmuse/BCI_Project/Xmuse-Connect/LSL/signal_data/20260511_181902
+2026-05-11 18:26:15 - INFO - [DataSaver/EEG_processed] segment 0006 → EEG_processed_seg0006.csv  (8316 样本，累计 85116)
+2026-05-11 18:26:15 - INFO - [DataSaver/EEG_processed] 保存完毕，共 6 个 segment，85116 个样本
+2026-05-11 18:26:15 - INFO -   EEG 处理数据已保存到: /Users/admin/Downloads/BCIXmuse/BCI_Project/Preprocess/signal_data
+2026-05-11 18:26:15 - INFO - [DataSaver/features] segment 0006 → features_seg0006.csv  (30 样本，累计 330)
+2026-05-11 18:26:15 - INFO - [DataSaver/features] 保存完毕，共 6 个 segment，330 个样本
+2026-05-11 18:26:15 - INFO - RealTimeFeatureExtractor 已关闭: /Users/admin/Downloads/BCIXmuse/BCI_Project/FeatureExtract/features_output/20260511_181907
+2026-05-11 18:26:15 - INFO -   EEG 特征数据已保存到: /Users/admin/Downloads/BCIXmuse/BCI_Project/FeatureExtract/features_output
+2026-05-11 18:26:15 - INFO - [DataSaver/attention] segment 0006 → attention_seg0006.csv  (26 样本，累计 326)
+2026-05-11 18:26:15 - INFO - [DataSaver/attention] 保存完毕，共 6 个 segment，326 个样本
+2026-05-11 18:26:15 - INFO - RealTimeAttentionDetector 已关闭
+2026-05-11 18:26:15 - INFO -   EEG 注意力数据已保存到: /Users/admin/Downloads/BCIXmuse/BCI_Project/Attention/attention_output
+2026-05-11 18:26:15 - INFO - RealTimeVisualizer 已关闭
+2026-05-11 18:26:15 - INFO - 所有数据保存完成。总采集时间: 428.10 秒
+2026-05-11 18:26:15 - INFO - 程序正常退出。

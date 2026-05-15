@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BCI 实时脑电监测</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           background: #0d1017; color: #e0e0e0; }
+
+    #statusbar {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 28px; background: #161b27; border-bottom: 1px solid #252b3d;
+    }
+    #statusbar h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.3px; flex: 1; }
+    #status-dot { width: 9px; height: 9px; border-radius: 50%; background: #e05252;
+                  box-shadow: 0 0 6px #e05252; transition: all 0.3s; }
+    #status-dot.connected { background: #44e888; box-shadow: 0 0 8px #44e888; }
+    #status-text { font-size: 12px; color: #6a7090; }
+
+    #tabs {
+      display: flex; padding: 0 28px; background: #161b27;
+      border-bottom: 2px solid #252b3d;
+    }
+    .tab {
+      padding: 11px 26px; cursor: pointer; font-size: 13px; font-weight: 500;
+      color: #5a6080; border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: all 0.15s;
+    }
+    .tab.active { color: #7eb8f7; border-bottom-color: #7eb8f7; }
+    .tab:hover:not(.active) { color: #a0aabf; background: #1c2233; }
+
+    .panel { display: none; padding: 20px 28px 32px; }
+    .panel.active { display: block; }
+    .chart-wrap { margin-bottom: 28px; }
+    #panel-features.active { padding: 0; height: calc(100vh - 90px); }
+    #panel-features iframe { width: 100%; height: 100%; border: none; display: block; }
+    #panel-processed.active { padding: 0; height: calc(100vh - 90px); }
+
+    #attn-cards { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .attn-card {
+      flex: 1; min-width: 140px; background: #161b27;
+      border: 1px solid #252b3d; border-radius: 8px; padding: 16px 20px;
+    }
+    .card-label {
+      font-size: 11px; color: #5a6080; text-transform: uppercase;
+      letter-spacing: 0.8px; margin-bottom: 10px;
+    }
+    .card-value { font-size: 30px; font-weight: 600; color: #e0e8ff; line-height: 1; }
+    .card-value.level-high   { color: #44e888; }
+    .card-value.level-medium { color: #ffb74d; }
+    .card-value.level-low    { color: #e05252; }
+  </style>
+</head>
+<body>
+
+<div id="statusbar">
+  <h1>BCI 实时脑电监测</h1>
+  <div id="status-dot"></div>
+  <span id="status-text">未连接</span>
+  <a href="/history.html" style="font-size:11px;color:#5a6080;text-decoration:none;margin-left:auto;
+     padding:4px 10px;border:1px solid #252b3d;border-radius:4px;">历史数据</a>
+</div>
+
+<div id="tabs">
+  <div class="tab active" onclick="switchTab('raw')">原始 EEG</div>
+  <div class="tab" onclick="switchTab('processed')">预处理 EEG</div>
+  <div class="tab" onclick="switchTab('features')">特征分析</div>
+  <div class="tab" onclick="switchTab('attention')">注意力分析</div>
+</div>
+
+<div id="panel-raw" class="panel active">
+  <div class="chart-wrap">
+    <div id="chart-raw" style="height:480px;width:100%;"></div>
+  </div>
+</div>
+
+<div id="panel-processed" class="panel">
+  <div class="chart-wrap">
+    <div id="chart-processed" style="height:480px;width:100%;"></div>
+  </div>
+</div>
+
+<div id="panel-features" class="panel">
+  <iframe src="/bands.html?embedded=1" id="frame-features"></iframe>
+</div>
+
+<div id="panel-attention" class="panel">
+  <div id="attn-cards">
+    <div class="attn-card">
+      <div class="card-label">注意力等级</div>
+      <div class="card-value" id="val-level">--</div>
+    </div>
+    <div class="attn-card">
+      <div class="card-label">注意力得分</div>
+      <div class="card-value" id="val-score">--</div>
+    </div>
+    <div class="attn-card">
+      <div class="card-label">参与度指数 EI</div>
+      <div class="card-value" id="val-ei">--</div>
+    </div>
+    <div class="attn-card">
+      <div class="card-label">θ / α 比值</div>
+      <div class="card-value" id="val-tar">--</div>
+    </div>
+  </div>
+  <div class="chart-wrap">
+    <div id="chart-attn-score" style="height:280px;width:100%;"></div>
+  </div>
+  <div class="chart-wrap">
+    <div id="chart-attn-indices" style="height:280px;width:100%;"></div>
+  </div>
+  <div class="chart-wrap">
+    <div id="chart-attn-bands" style="height:280px;width:100%;"></div>
+  </div>
+</div>
+
+<script>
+const WS_URL    = `ws://${location.host}/ws`;
+const CHANNELS  = ["CH1","CH2","CH3","CH4"];
+const RAW_CH    = ["ch_1","ch_2","ch_3","ch_4"];
+const BANDS     = ["delta","theta","alpha","beta","gamma"];
+const CH_COLORS = ["#4fc3f7","#81c784","#ffb74d","#e57373"];
+const BAND_COLORS = { delta:"#7986cb", theta:"#4db6ac", alpha:"#81c784", beta:"#ffb74d", gamma:"#e57373" };
+const OFFSET_SCALE = 150;
+
+// ── 存储每张图的 layout，react 时传回，防止 layout 被清空 ──────────
+const LAYOUTS = {};
+
+function makeLayout(chartTitle, xLabel, yLabel, extra) {
+  const base = {
+    paper_bgcolor: "#1a1f30",
+    plot_bgcolor:  "#141828",
+    font: { color: "#c0c8dc", size: 12 },
+    title: {
+      text: chartTitle,
+      font: { size: 14, color: "#e0e8ff" },
+      x: 0.5, xanchor: "center", pad: { t: 6 },
+    },
+    showlegend: true,
+    legend: {
+      orientation: "v", x: 1.02, xanchor: "left", y: 1, yanchor: "top",
+      font: { size: 12, color: "#c0c8dc" }, bgcolor: "rgba(0,0,0,0)",
+    },
+    margin: { l: 90, r: 160, t: 64, b: 60 },
+    xaxis: {
+      color: "#8090b0", gridcolor: "#1e2538", zerolinecolor: "#252b3d",
+      tickfont: { size: 11, color: "#8090b0" },
+      title: { text: xLabel, font: { size: 13, color: "#c0ceee" }, standoff: 14 },
+    },
+    yaxis: {
+      color: "#8090b0", gridcolor: "#1e2538", zerolinecolor: "#252b3d",
+      tickfont: { size: 11, color: "#8090b0" },
+      title: { text: yLabel, font: { size: 13, color: "#c0ceee" }, standoff: 14 },
+    },
+  };
+  return Object.assign(base, extra || {});
+}
+
+// 统一初始化：保存 layout，再调用 newPlot
+function initChart(id, traces, layout, cfg) {
+  LAYOUTS[id] = layout;
+  Plotly.newPlot(id, traces, layout, cfg || { responsive: true, displayModeBar: false });
+}
+
+// 统一更新：保留 layout 防止标签丢失，同时保留用户对图例的 visible 操作
+function reactChart(id, traces) {
+  const el = document.getElementById(id);
+  if (el?.data?.length === traces.length) {
+    traces.forEach((t, i) => {
+      const v = el.data[i].visible;
+      if (v === false || v === "legendonly") t.visible = v;
+    });
+  }
+  Plotly.react(id, traces, LAYOUTS[id], { responsive: true, displayModeBar: false });
+}
+
+// ── Tab 切换 ─────────────────────────────────────────
+const TAB_NAMES = ["raw","processed","features","attention"];
+
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((t, i) =>
+    t.classList.toggle("active", TAB_NAMES[i] === name));
+  document.querySelectorAll(".panel").forEach(p =>
+    p.classList.toggle("active", p.id === `panel-${name}`));
+
+  setTimeout(() => {
+    if (name === "attention") {
+      ensureAttnCharts();
+      ["chart-attn-score","chart-attn-indices","chart-attn-bands"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) Plotly.Plots.resize(el);
+      });
+      if (_snap?.attention) updateAttentionPanel(_snap.attention, _snap.features);
+    } else if (name !== "features") {
+      const chartId = name === "raw" ? "chart-raw" : "chart-processed";
+      const el = document.getElementById(chartId);
+      if (el) Plotly.Plots.resize(el);
+      requestAnimationFrame(() => {
+        if (name === "raw" && _snap?.raw)
+          updateEEGChart("chart-raw", RAW_CH, _snap.raw.timestamps, _snap.raw);
+        else if (name === "processed" && _snap?.processed)
+          updateEEGChart("chart-processed", CHANNELS, _snap.processed.timestamps, _snap.processed);
+      });
+    }
+  }, 80);
+}
+
+// ══════════════════════════════════════════════════════
+// 初始化所有图表
+// ══════════════════════════════════════════════════════
+const CFG = { responsive: true, displayModeBar: false };
+
+initChart("chart-raw",
+  RAW_CH.map((ch, i) => ({ x:[], y:[], mode:"lines", name:ch,
+    line:{ color:CH_COLORS[i], width:1 }, type:"scatter" })),
+  makeLayout(
+    "原始脑电波  ·  ch_1 ~ ch_4",
+    "采集时间 (HH:MM:SS.mmm)",
+    "电压 (μV)  · 各通道间偏移 150 μV"
+  )
+);
+
+initChart("chart-processed",
+  CHANNELS.map((ch, i) => ({ x:[], y:[], mode:"lines", name:ch,
+    line:{ color:CH_COLORS[i], width:1 }, type:"scatter" })),
+  makeLayout(
+    "预处理脑电波  ·  CH1 ~ CH4  (基线校正 → 滤波 → z-score 归一化)",
+    "采集时间 (HH:MM:SS.mmm)",
+    "幅值 (z-score, σ)  · 各通道间偏移 150"
+  )
+);
+
+// chart-feat-bands 和 chart-feat-bar 在 display:none 的面板中，
+// Plotly.newPlot 会以 0 宽初始化导致后续 react 失效。
+// 改为懒加载：首次切换到特征分析 tab 时才初始化。
+let _featReady = false;
+function ensureFeatCharts() {
+  if (_featReady) return;
+  _featReady = true;
+  initChart("chart-feat-bands",
+    BANDS.map(band => ({ x:[], y:[], mode:"lines+markers",
+      marker:{ size:4, color:BAND_COLORS[band] },
+      name:band, line:{ color:BAND_COLORS[band], width:2 }, type:"scatter" })),
+    makeLayout(
+      "各频段功率趋势  ·  δ(0.5-4 Hz)  θ(4-8 Hz)  α(8-13 Hz)  β(13-30 Hz)  γ(30-45 Hz)  · 四通道均值",
+      "时间 (HH:MM:SS.mmm)",
+      "功率 (μV²/Hz)  · 四通道均值"
+    )
+  );
+  initChart("chart-feat-bar",
+    BANDS.map(band => ({ x:CHANNELS, y:[0,0,0,0], type:"bar", name:band,
+      marker:{ color:BAND_COLORS[band] } })),
+    makeLayout(
+      "当前 epoch 各频段功率  ·  分通道对比",
+      "电极通道",
+      "功率 (μV²/Hz)",
+      { barmode:"group",
+        legend:{ orientation:"h", x:0.5, xanchor:"center", y:-0.22,
+                 font:{ size:12, color:"#c0c8dc" }, bgcolor:"rgba(0,0,0,0)" } }
+    )
+  );
+}
+
+// ── 注意力面板懒加载 ──────────────────────────────────
+let _attnReady = false;
+function ensureAttnCharts() {
+  if (_attnReady) return;
+  _attnReady = true;
+  initChart("chart-attn-score",
+    [{ x:[], y:[], mode:"lines", name:"注意力得分",
+       line:{ color:"#7eb8f7", width:2 }, type:"scatter" }],
+    makeLayout(
+      "注意力得分趋势  ·  sigmoid 归一化 [0, 1]",
+      "时间 (HH:MM:SS.mmm)", "得分",
+      { yaxis:{ range:[0,1], color:"#8090b0", gridcolor:"#1e2538",
+                zerolinecolor:"#252b3d",
+                tickfont:{ size:11, color:"#8090b0" },
+                title:{ text:"得分", font:{ size:13, color:"#c0ceee" }, standoff:14 } } }
+    )
+  );
+  initChart("chart-attn-indices",
+    [
+      { x:[], y:[], mode:"lines", name:"参与度指数 EI  β/(α+θ)",
+        line:{ color:"#ffb74d", width:2 }, type:"scatter" },
+      { x:[], y:[], mode:"lines", name:"θ/α 比值",
+        line:{ color:"#e57373", width:2 }, type:"scatter" },
+    ],
+    makeLayout(
+      "注意力原始指数趋势",
+      "时间 (HH:MM:SS.mmm)", "指数值"
+    )
+  );
+  initChart("chart-attn-bands",
+    BANDS.map(band => ({ x:[], y:[], mode:"lines+markers",
+      marker:{ size:4, color:BAND_COLORS[band] },
+      name:band, line:{ color:BAND_COLORS[band], width:2 }, type:"scatter" })),
+    makeLayout(
+      "频段功率趋势  ·  δ θ α β γ  · 四通道均值",
+      "时间 (HH:MM:SS.mmm)", "功率 (μV²/Hz)"
+    )
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// 数据更新（均使用 reactChart 保留 layout）
+// ══════════════════════════════════════════════════════
+function updateEEGChart(divId, channels, tsArr, chData) {
+  if (!tsArr || !tsArr.length) return;
+  reactChart(divId,
+    channels.map((ch, i) => ({
+      x: tsArr,
+      y: (chData[ch] || []).map(v => v + i * OFFSET_SCALE),
+      mode: "lines", name: ch,
+      line: { color: CH_COLORS[i], width: 1 }, type: "scatter",
+    }))
+  );
+}
+
+function updateBandWaveform(feats) {
+  if (!feats?.timestamps?.length) return;
+  const ts = feats.timestamps, n = ts.length;
+  reactChart("chart-feat-bands",
+    BANDS.map(band => {
+      // 对每个时间点计算四通道均值
+      const y = new Array(n).fill(0);
+      let chCnt = 0;
+      CHANNELS.forEach(ch => {
+        const arr = feats[ch]?.[band];
+        if (!arr?.length) return;
+        chCnt++;
+        for (let i = 0; i < n; i++) y[i] += (arr[i] ?? 0);
+      });
+      return {
+        x: ts,
+        y: chCnt ? y.map(v => v / chCnt) : y,
+        mode: "lines+markers",
+        marker: { size: 4, color: BAND_COLORS[band] },
+        name: band,
+        line: { color: BAND_COLORS[band], width: 2 },
+        type: "scatter",
+        connectgaps: false,
+      };
+    })
+  );
+}
+
+function updateFeatBar(feats) {
+  if (!feats) return;
+  const last = (ch, band) => { const a = feats[ch]?.[band]; return a?.length ? a[a.length-1] : 0; };
+  reactChart("chart-feat-bar",
+    BANDS.map(band => ({
+      x: CHANNELS,
+      y: CHANNELS.map(ch => last(ch, band)),
+      type: "bar", name: band, marker: { color: BAND_COLORS[band] },
+    }))
+  );
+}
+
+const LEVEL_LABEL = { high:"高度集中", medium:"中度集中", low:"低 / 走神" };
+const LEVEL_CLASS = { high:"level-high", medium:"level-medium", low:"level-low" };
+
+// 计算四通道均值频段功率序列
+function avgBandPowers(feats, band) {
+  if (!feats?.timestamps?.length) return { x: [], y: [] };
+  const ts = feats.timestamps, n = ts.length;
+  const y = new Array(n).fill(0);
+  let cnt = 0;
+  CHANNELS.forEach(ch => {
+    const arr = feats[ch]?.[band];
+    if (!arr?.length) return;
+    cnt++;
+    for (let i = 0; i < n; i++) y[i] += (arr[i] ?? 0);
+  });
+  return { x: ts, y: cnt ? y.map(v => v / cnt) : y };
+}
+
+function updateAttentionPanel(attn, feats) {
+  if (!attn?.timestamps?.length) return;
+
+  // 更新统计卡片
+  const score = attn.attention_score?.slice(-1)[0];
+  const ei    = attn.engagement_index?.slice(-1)[0];
+  const tar   = attn.theta_alpha_ratio?.slice(-1)[0];
+  const level = attn.level?.slice(-1)[0];
+
+  if (score != null) document.getElementById("val-score").textContent = score.toFixed(3);
+  if (ei    != null) document.getElementById("val-ei").textContent    = ei.toFixed(3);
+  if (tar   != null) document.getElementById("val-tar").textContent   = tar.toFixed(3);
+  if (level) {
+    const el = document.getElementById("val-level");
+    el.textContent = LEVEL_LABEL[level] ?? level;
+    el.className   = "card-value " + (LEVEL_CLASS[level] ?? "");
+  }
+
+  if (!_attnReady) return;
+  const ts = attn.timestamps;
+  reactChart("chart-attn-score", [{
+    x: ts, y: attn.attention_score,
+    mode: "lines", name: "注意力得分",
+    line: { color: "#7eb8f7", width: 2 }, type: "scatter",
+  }]);
+
+  reactChart("chart-attn-indices", [
+    { x: ts, y: attn.engagement_index,  mode: "lines", name: "参与度指数 EI  β/(α+θ)",
+      line: { color: "#ffb74d", width: 2 }, type: "scatter" },
+    { x: ts, y: attn.theta_alpha_ratio, mode: "lines", name: "θ/α 比值",
+      line: { color: "#e57373", width: 2 }, type: "scatter" },
+  ]);
+
+  if (feats?.timestamps?.length) {
+    reactChart("chart-attn-bands",
+      BANDS.map(band => {
+        const { x, y } = avgBandPowers(feats, band);
+        return {
+          x, y, type: "scatter", mode: "lines+markers",
+          marker: { size: 4, color: BAND_COLORS[band] },
+          name: band, line: { color: BAND_COLORS[band], width: 2 },
+          connectgaps: false,
+        };
+      })
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// WebSocket
+// ══════════════════════════════════════════════════════
+let ws = null, reconnectTimer = null, _dbgT = 0, _snap = null;
+
+function setStatus(ok) {
+  document.getElementById("status-dot").classList.toggle("connected", ok);
+  document.getElementById("status-text").textContent = ok ? "实时采集中" : "未连接，尝试重连…";
+}
+
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen  = () => { setStatus(true); clearTimeout(reconnectTimer); };
+  ws.onclose = () => { setStatus(false); reconnectTimer = setTimeout(connect, 3000); };
+  ws.onerror = () => ws.close();
+  ws.onmessage = evt => {
+    let d; try { d = JSON.parse(evt.data); } catch { return; }
+    _snap = d;
+    // throttled debug: log feature data once every 5s
+    const now = Date.now();
+    if (now - _dbgT > 5000 && d.features?.timestamps?.length) {
+      _dbgT = now;
+      const f = d.features;
+      console.log("[BCI feat] ts:", f.timestamps.slice(-1),
+        "| CH1 delta:", f.CH1?.delta?.slice(-1),
+        "| CH1 alpha:", f.CH1?.alpha?.slice(-1),
+        "| n_pts:", f.timestamps.length);
+    }
+    if (d.raw)       updateEEGChart("chart-raw",       RAW_CH,   d.raw.timestamps,       d.raw);
+    if (d.processed) updateEEGChart("chart-processed", CHANNELS, d.processed.timestamps, d.processed);
+    if (d.attention) updateAttentionPanel(d.attention, d.features);
+  };
+}
+connect();
+</script>
+</body>
+</html>
