@@ -110,7 +110,11 @@ class HistoryReader:
                     if sessions[canonical]["end_ts"] is None or t1 > sessions[canonical]["end_ts"]:
                         sessions[canonical]["end_ts"] = t1
 
-        return sorted(sessions.values(), key=lambda s: s["session_id"], reverse=True)
+        result = sorted(sessions.values(), key=lambda s: s["session_id"], reverse=True)
+        for s in result:
+            s["start_time"] = _fmt_unix_ts(s["start_ts"])
+            s["end_time"]   = _fmt_unix_ts(s["end_ts"])
+        return result
 
     # ── 加载数据 ──────────────────────────────────────────────────────────
 
@@ -281,6 +285,16 @@ def _lsl_unix_offset(session_id: str, first_lsl_ts: float) -> float:
         return dt.timestamp() - first_lsl_ts
     except Exception:
         return 0.0
+
+
+def _fmt_unix_ts(ts: Optional[float]) -> Optional[str]:
+    """Unix 时间戳 → 'YYYY-MM-DD HH:MM:SS' 本地时间字符串，None 时返回 None"""
+    if ts is None:
+        return None
+    try:
+        return datetime.datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
 
 
 def _fmt_ts(timestamps: list) -> list:

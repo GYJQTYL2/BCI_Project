@@ -71,13 +71,20 @@ class TimestampCorrector:
         self._window_x: List[float] = []
         self._window_ts: List[float] = []
 
-        # 初始 time_correction
+        # LSL local_clock 与 Unix time 的固定偏移（初始化时测量一次）
+        # pylsl.local_clock() 在 Windows/Linux 基准点为系统启动时刻，不是 Unix 纪元，
+        # 必须加上此偏移才能让 datetime.fromtimestamp() 显示正确的本地时间。
+        # macOS 上该值约为 0，其他平台可能相差数小时乃至数天。
+        self._unix_offset: float = time.time() - pylsl.local_clock()
+
+        # 初始 time_correction（LSL 发送方时钟 → 本机 LSL 时钟的偏移）
         self._correction: float = self._fetch_correction()
         self._last_refresh: float = time.monotonic()
 
         log.info(
             f"[TimestampCorrector] 初始化完成 "
-            f"correction={self._correction:.4f}s  "
+            f"unix_offset={self._unix_offset:.3f}s  "
+            f"lsl_correction={self._correction:.4f}s  "
             f"dejitter={dejitter}  "
             f"refresh_interval={correction_interval}s"
         )
@@ -107,7 +114,7 @@ class TimestampCorrector:
 
         self._maybe_refresh()
 
-        ts = np.asarray(lsl_timestamps, dtype=np.float64) + self._correction
+        ts = np.asarray(lsl_timestamps, dtype=np.float64) + self._correction + self._unix_offset
 
         if self._dejitter and len(ts) > 1:
             ts = self._apply_dejitter(ts)

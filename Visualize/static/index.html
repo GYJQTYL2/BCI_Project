@@ -124,7 +124,8 @@ const RAW_CH    = ["ch_1","ch_2","ch_3","ch_4"];
 const BANDS     = ["delta","theta","alpha","beta","gamma"];
 const CH_COLORS = ["#4fc3f7","#81c784","#ffb74d","#e57373"];
 const BAND_COLORS = { delta:"#7986cb", theta:"#4db6ac", alpha:"#81c784", beta:"#ffb74d", gamma:"#e57373" };
-const OFFSET_SCALE = 150;
+const RAW_OFFSET_SCALE  = 150;   // 原始 EEG 单位 μV
+const PROC_OFFSET_SCALE = 150;   // 预处理后仍为 μV（幅值限制 ±100 μV）
 
 // ── 存储每张图的 layout，react 时传回，防止 layout 被清空 ──────────
 const LAYOUTS = {};
@@ -202,7 +203,7 @@ function switchTab(name) {
         if (name === "raw" && _snap?.raw)
           updateEEGChart("chart-raw", RAW_CH, _snap.raw.timestamps, _snap.raw);
         else if (name === "processed" && _snap?.processed)
-          updateEEGChart("chart-processed", CHANNELS, _snap.processed.timestamps, _snap.processed);
+          updateEEGChart("chart-processed", CHANNELS, _snap.processed.timestamps, _snap.processed, PROC_OFFSET_SCALE);
       });
     }
   }, 80);
@@ -229,7 +230,7 @@ initChart("chart-processed",
   makeLayout(
     "预处理脑电波  ·  CH1 ~ CH4  (基线校正 → 滤波 → z-score 归一化)",
     "采集时间 (HH:MM:SS.mmm)",
-    "幅值 (z-score, σ)  · 各通道间偏移 150"
+    "幅值 (μV)  · 各通道间偏移 150 μV"
   )
 );
 
@@ -307,12 +308,13 @@ function ensureAttnCharts() {
 // ══════════════════════════════════════════════════════
 // 数据更新（均使用 reactChart 保留 layout）
 // ══════════════════════════════════════════════════════
-function updateEEGChart(divId, channels, tsArr, chData) {
+function updateEEGChart(divId, channels, tsArr, chData, offsetScale) {
   if (!tsArr || !tsArr.length) return;
+  const scale = offsetScale ?? RAW_OFFSET_SCALE;
   reactChart(divId,
     channels.map((ch, i) => ({
       x: tsArr,
-      y: (chData[ch] || []).map(v => v + i * OFFSET_SCALE),
+      y: (chData[ch] || []).map(v => v + i * scale),
       mode: "lines", name: ch,
       line: { color: CH_COLORS[i], width: 1 }, type: "scatter",
     }))
@@ -454,7 +456,7 @@ function connect() {
         "| n_pts:", f.timestamps.length);
     }
     if (d.raw)       updateEEGChart("chart-raw",       RAW_CH,   d.raw.timestamps,       d.raw);
-    if (d.processed) updateEEGChart("chart-processed", CHANNELS, d.processed.timestamps, d.processed);
+    if (d.processed) updateEEGChart("chart-processed", CHANNELS, d.processed.timestamps, d.processed, PROC_OFFSET_SCALE);
     if (d.attention) updateAttentionPanel(d.attention, d.features);
   };
 }

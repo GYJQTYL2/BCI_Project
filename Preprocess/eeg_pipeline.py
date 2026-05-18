@@ -119,7 +119,7 @@ class EEGPreprocessPipeline:
         df = self._step2_baseline(df)
         df = self._step3_filter(df)
         df, _ = self._step4_amp_remove(df)
-        df = self._step5_scale(df)
+        #df = self._step5_scale(df)
         return df
 
     # ── 核心运行逻辑 ───────────────────────────
@@ -156,8 +156,8 @@ class EEGPreprocessPipeline:
             df.to_csv(out_dir / f"{stem}_removed.csv", index=False)
 
         # Step 5: 数据缩放
-        print("  [5/5] 数据缩放...")
-        df = self._step5_scale(df)
+        #print("  [5/5] 数据缩放...")
+        #df = self._step5_scale(df)
 
         output_path = out_dir / f"{stem}{self.output_suffix}.csv"
         df.to_csv(output_path, index=False)

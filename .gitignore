@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+*.cpython-39.pyc
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+
+# 采集数据（原始 EEG / 预处理 / 特征 / 注意力）
+Xmuse-Connect/LSL/signal_data/
+Preprocess/signal_data/
+FeatureExtract/features_output/
+Attention/attention_output/
+
+# 批处理中间文件
+*_cleaned.csv
+*_baseline.csv
+*_filtered.csv
+*_removed.csv
+*_preprocessed.csv
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志
+*.log

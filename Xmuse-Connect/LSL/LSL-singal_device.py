@@ -278,7 +278,7 @@ def main():
                         if visualizer:
                             visualizer.add_raw(s_type, samples, corrected_timestamps.tolist())
                         if s_type in processors:
-                            for df_proc in processors[s_type].add(samples, corrected_timestamps.tolist()):
+                            for df_proc in processors[s_type].add(samples, lsl_timestamps):
                                 if df_proc is not None and not df_proc.empty:
                                     if visualizer:
                                         visualizer.add_processed(s_type, df_proc)

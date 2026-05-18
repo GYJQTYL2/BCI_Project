@@ -49,6 +49,14 @@
     }
     #btn-load:hover { background: #304080; }
     #btn-load:disabled { opacity: 0.4; cursor: default; }
+    #btn-refresh {
+      padding: 3px 8px; border-radius: 4px; border: 1px solid #2e3650;
+      background: #1a2035; color: #5a6080; font-size: 14px;
+      cursor: pointer; transition: all 0.15s; line-height: 1;
+    }
+    #btn-refresh:hover { color: #a0aabf; border-color: #3a4060; }
+    #btn-refresh.spinning { animation: spin 0.6s linear; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     #load-status { font-size: 11px; color: #5a6080; }
 
     /* ── 数据类型标签页 ── */
@@ -95,6 +103,7 @@
     <select id="sel-session">
       <option value="">-- 加载中 --</option>
     </select>
+    <button id="btn-refresh" onclick="fetchSessions()" title="刷新会话列表">↻</button>
   </div>
   <div class="ctrl-group">
     <span class="ctrl-label">开始：</span>
@@ -154,7 +163,8 @@ const BANDS      = ["delta","theta","alpha","beta","gamma"];
 const CH_COLORS  = ["#4fc3f7","#81c784","#ffb74d","#e57373"];
 const BAND_COLORS = { delta:"#7986cb", theta:"#4db6ac", alpha:"#81c784", beta:"#ffb74d", gamma:"#e57373" };
 const BAND_LABELS = { delta:"δ Delta (0.5-4 Hz)", theta:"θ Theta (4-8 Hz)", alpha:"α Alpha (8-13 Hz)", beta:"β Beta (13-30 Hz)", gamma:"γ Gamma (30-45 Hz)" };
-const OFFSET_SCALE = 150;
+const RAW_OFFSET_SCALE  = 150;   // 原始 EEG 单位 μV
+const PROC_OFFSET_SCALE = 150;   // 预处理后仍为 μV（幅值限制 ±100 μV）
 const CFG = { responsive: true, displayModeBar: false };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -201,14 +211,14 @@ function ensureCharts(type) {
       RAW_CH.map((ch, i) => ({ x:[], y:[], mode:"lines", name:ch,
         line:{ color:CH_COLORS[i], width:1 }, type:"scatter" })),
       makeLayout("原始脑电波 · ch_1 ~ ch_4", "时间 (HH:MM:SS.mmm)",
-                 "电压 (μV) · 各通道偏移 " + OFFSET_SCALE + " μV"), CFG);
+                 "电压 (μV) · 各通道偏移 " + RAW_OFFSET_SCALE + " μV"), CFG);
   }
   else if (type === "processed") {
     Plotly.newPlot("chart-processed",
       CHANNELS.map((ch, i) => ({ x:[], y:[], mode:"lines", name:ch,
         line:{ color:CH_COLORS[i], width:1 }, type:"scatter" })),
       makeLayout("预处理脑电波 · CH1 ~ CH4", "时间 (HH:MM:SS.mmm)",
-                 "幅值 (z-score) · 各通道偏移 " + OFFSET_SCALE), CFG);
+                 "幅值 (μV) · 各通道偏移 " + PROC_OFFSET_SCALE + " μV"), CFG);
   }
   else if (type === "features") {
     Plotly.newPlot("chart-feat-line",
@@ -250,12 +260,13 @@ function ensureCharts(type) {
 // ═══════════════════════════════════════════════════════════════════
 // 渲染函数
 // ═══════════════════════════════════════════════════════════════════
-function renderEEG(divId, channels, data) {
+function renderEEG(divId, channels, data, offsetScale) {
   if (!data?.timestamps?.length) return;
+  const scale = offsetScale ?? RAW_OFFSET_SCALE;
   Plotly.react(divId,
     channels.map((ch, i) => ({
       x: data.timestamps,
-      y: (data[ch] || []).map(v => v + i * OFFSET_SCALE),
+      y: (data[ch] || []).map(v => v + i * scale),
       mode:"lines", name:ch, line:{ color:CH_COLORS[i], width:1 }, type:"scatter",
     }))
   );
@@ -353,17 +364,26 @@ function onSessionChange() {
 }
 
 async function fetchSessions() {
+  const btn = document.getElementById("btn-refresh");
+  btn.classList.add("spinning");
   try {
     const res = await fetch("/history/sessions");
     _sessions = await res.json();
     const sel = document.getElementById("sel-session");
+    const prevSid = sel.value;   // 保留当前选中的 session
     sel.innerHTML = _sessions.length
       ? _sessions.map(s => `<option value="${s.session_id}">${s.display}</option>`).join("")
       : `<option value="">（无可用会话）</option>`;
+    // 恢复之前选中的 session（若仍存在）；否则选第一个
+    if (prevSid && _sessions.some(s => s.session_id === prevSid)) {
+      sel.value = prevSid;
+    }
     if (_sessions.length) onSessionChange();
   } catch(e) {
     document.getElementById("sel-session").innerHTML = `<option value="">（获取失败）</option>`;
     console.error("fetchSessions:", e);
+  } finally {
+    btn.classList.remove("spinning");
   }
 }
 
@@ -399,7 +419,7 @@ async function loadData() {
 
     // 渲染
     if      (type === "raw")       renderEEG("chart-raw",       RAW_CH,   data);
-    else if (type === "processed") renderEEG("chart-processed", CHANNELS, data);
+    else if (type === "processed") renderEEG("chart-processed", CHANNELS, data, PROC_OFFSET_SCALE);
     else if (type === "features")  renderFeatures(data);
     else if (type === "attention") renderAttention(data);
 
