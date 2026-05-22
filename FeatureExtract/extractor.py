@@ -110,3 +110,5 @@ class EEGFeatureExtractor:
             rows.append(self.extract_epoch(epoch_df))
 
         return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+
+

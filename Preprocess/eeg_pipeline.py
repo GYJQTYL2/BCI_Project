@@ -53,8 +53,8 @@ class EEGPreprocessPipeline:
         baseline_method: Literal["channelwise", "dc_offset"] = "channelwise",
         baseline_window: Tuple[float, float] = (0.0, 0.2),
         dc_offset_val: float = 800.0,
-        hp_cutoff: float = 0.5,
-        lp_cutoff: float = 45.0,
+        hp_cutoff: float = 1,#0.5,
+        lp_cutoff: float = 30.0,
         amplitude_threshold: float = 100.0,
         scale_method: Literal["zscore", "minmax"] = "zscore",
         channels: Optional[List[str]] = None,
@@ -117,8 +117,11 @@ class EEGPreprocessPipeline:
         if df.empty:
             return df
         df = self._step2_baseline(df)
+        # 滤波前：高阈值只拦截电极脱落/极端眨眼（原始信号含慢漂移，不能用小阈值）
+        df, _ = interpolate_outliers(df, 800.0)
         df = self._step3_filter(df)
-        df, _ = self._step4_amp_remove(df)
+        # 滤波后：低阈值清理残留尖峰（高通已去慢漂移，信号幅值已降至 ±100 µV 级别）
+        #df, _ = self._step4_amp_remove(df)
         #df = self._step5_scale(df)
         return df
 
@@ -142,18 +145,18 @@ class EEGPreprocessPipeline:
         if self.save_intermediates:
             df.to_csv(out_dir / f"{stem}_baseline.csv", index=False)
 
-        # Step 3: 频域滤波
-        print("  [3/5] 频域滤波...")
-        df = self._step3_filter(df)
-        if self.save_intermediates:
-            df.to_csv(out_dir / f"{stem}_filtered.csv", index=False)
-
-        # Step 4: 极值去除
-        print("  [4/5] 极值去除...")
-        df, n_fixed = self._step4_amp_remove(df)
+        # 滤波前：高阈值只拦截电极脱落/极端眨眼
+        print("  [3/5] 极值去除...")
+        df, n_fixed = interpolate_outliers(df, 800.0)
         print(f"        共修复 {n_fixed} 个极值点")
         if self.save_intermediates:
             df.to_csv(out_dir / f"{stem}_removed.csv", index=False)
+
+        # Step 3: 频域滤波
+        print("  [4/5] 频域滤波...")
+        df = self._step3_filter(df)
+        if self.save_intermediates:
+            df.to_csv(out_dir / f"{stem}_filtered.csv", index=False)
 
         # Step 5: 数据缩放
         #print("  [5/5] 数据缩放...")

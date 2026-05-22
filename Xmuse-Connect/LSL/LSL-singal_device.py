@@ -284,6 +284,7 @@ def main():
                                         visualizer.add_processed(s_type, df_proc)
                                     if s_type in feat_extractors:
                                         df_feat = feat_extractors[s_type].add(df_proc)
+                                        attn = None
                                         if s_type in attn_detectors and df_feat is not None and not df_feat.empty:
                                             attn = attn_detectors[s_type].add(df_feat)
                                         if visualizer and df_feat is not None and not df_feat.empty:
@@ -294,8 +295,8 @@ def main():
                         total_samples_collected[s_type] += len(samples)
                         if total_samples_collected[s_type] % 1000 == 0:
                             logging.debug(f"{s_type} 已采集 {total_samples_collected[s_type]} 个样本")
-                except pylsl.timeout_error:
-                    pass  # 没有新数据，正常现象
+                except (KeyboardInterrupt, SystemExit):
+                    raise
                 except Exception as e:
                     logging.error(f"处理 {s_type} 数据时出错: {str(e)}", exc_info=True)
                     continue
