@@ -105,6 +105,14 @@
       <div class="card-label">θ / α 比值</div>
       <div class="card-value" id="val-tar">--</div>
     </div>
+    <div class="attn-card">
+      <div class="card-label">认知负荷等级</div>
+      <div class="card-value" id="val-cl-level">--</div>
+    </div>
+    <div class="attn-card">
+      <div class="card-label">认知负荷得分</div>
+      <div class="card-value" id="val-cl-score">--</div>
+    </div>
   </div>
   <div class="chart-wrap">
     <div id="chart-attn-score" style="height:280px;width:100%;"></div>
@@ -114,6 +122,9 @@
   </div>
   <div class="chart-wrap">
     <div id="chart-attn-bands" style="height:280px;width:100%;"></div>
+  </div>
+  <div class="chart-wrap">
+    <div id="chart-cl-score" style="height:240px;width:100%;"></div>
   </div>
 </div>
 
@@ -303,6 +314,20 @@ function ensureAttnCharts() {
       "时间 (HH:MM:SS.mmm)", "功率 (μV²/Hz)"
     )
   );
+  initChart("chart-cl-score",
+    [
+      { x:[], y:[], mode:"lines", name:"认知负荷得分",
+        line:{ color:"#ce93d8", width:2 }, type:"scatter" },
+      { x:[], y:[], mode:"lines", name:"θ/α 指数 (CI)",
+        line:{ color:"#80cbc4", width:1.5, dash:"dot" }, type:"scatter" },
+    ],
+    makeLayout(
+      "认知负荷趋势  ·  θ/α sigmoid 归一化",
+      "时间 (HH:MM:SS.mmm)", "得分 / 指数",
+      { yaxis:{ color:"#8090b0", gridcolor:"#1e2538", zerolinecolor:"#252b3d",
+                tickfont:{ size:11 }, title:{ text:"得分 / 指数", font:{ size:13, color:"#c0ceee" }, standoff:14 } } }
+    )
+  );
 }
 
 // ══════════════════════════════════════════════════════
@@ -427,6 +452,30 @@ function updateAttentionPanel(attn, feats) {
   }
 }
 
+const CL_LEVEL_LABEL = { high:"高负荷", medium:"中负荷", low:"低负荷" };
+
+function updateCognitiveLoadPanel(cl) {
+  if (!cl?.timestamps?.length) return;
+
+  const clScore = cl.cog_load_score?.slice(-1)[0];
+  const clLevel = cl.level?.slice(-1)[0];
+
+  if (clScore != null) document.getElementById("val-cl-score").textContent = clScore.toFixed(3);
+  if (clLevel) {
+    const el = document.getElementById("val-cl-level");
+    el.textContent = CL_LEVEL_LABEL[clLevel] ?? clLevel;
+    el.className   = "card-value " + (LEVEL_CLASS[clLevel] ?? "");
+  }
+
+  if (!_attnReady) return;
+  reactChart("chart-cl-score", [
+    { x: cl.timestamps, y: cl.cog_load_score, mode: "lines", name: "认知负荷得分",
+      line: { color: "#ce93d8", width: 2 }, type: "scatter" },
+    { x: cl.timestamps, y: cl.cognitive_load_index, mode: "lines", name: "θ/α 指数 (CI)",
+      line: { color: "#80cbc4", width: 1.5, dash: "dot" }, type: "scatter" },
+  ]);
+}
+
 // ══════════════════════════════════════════════════════
 // WebSocket
 // ══════════════════════════════════════════════════════
@@ -455,9 +504,10 @@ function connect() {
         "| CH1 alpha:", f.CH1?.alpha?.slice(-1),
         "| n_pts:", f.timestamps.length);
     }
-    if (d.raw)       updateEEGChart("chart-raw",       RAW_CH,   d.raw.timestamps,       d.raw);
-    if (d.processed) updateEEGChart("chart-processed", CHANNELS, d.processed.timestamps, d.processed, PROC_OFFSET_SCALE);
-    if (d.attention) updateAttentionPanel(d.attention, d.features);
+    if (d.raw)            updateEEGChart("chart-raw",       RAW_CH,   d.raw.timestamps,       d.raw);
+    if (d.processed)      updateEEGChart("chart-processed", CHANNELS, d.processed.timestamps, d.processed, PROC_OFFSET_SCALE);
+    if (d.attention)      updateAttentionPanel(d.attention, d.features);
+    if (d.cognitive_load) updateCognitiveLoadPanel(d.cognitive_load);
   };
 }
 connect();

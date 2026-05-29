@@ -22,6 +22,7 @@ Xmuse-Connect/LSL/signal_data/
 Preprocess/signal_data/
 FeatureExtract/features_output/
 Attention/attention_output/
+CognitiveLoad/cl_output/
 
 # 批处理中间文件
 *_cleaned.csv

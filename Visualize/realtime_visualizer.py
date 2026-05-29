@@ -104,3 +104,7 @@ class RealTimeVisualizer:
     def add_attention(self, result: dict) -> None:
         """写入注意力检测结果（来自 RealTimeAttentionDetector.add()）"""
         self._bridge.add_attention(result)
+
+    def add_cognitive_load(self, result: dict) -> None:
+        """写入认知负荷检测结果（来自 RealTimeCognitiveLoadDetector.add()）"""
+        self._bridge.add_cognitive_load(result)

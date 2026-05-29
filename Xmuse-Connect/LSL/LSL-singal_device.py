@@ -28,6 +28,10 @@ _ATTENTION_DIR = Path(__file__).parent.parent.parent / "Attention"
 sys.path.insert(0, str(_ATTENTION_DIR))
 from realtime_attention import RealTimeAttentionDetector
 
+_COGLOAD_DIR = Path(__file__).parent.parent.parent / "CognitiveLoad"
+sys.path.insert(0, str(_COGLOAD_DIR))
+from realtime_cognitive_load import RealTimeCognitiveLoadDetector
+
 
 def setup_logging(log_dir: str):
     """配置日志系统，同时输出到控制台和文件"""
@@ -82,6 +86,8 @@ def main():
                         help='实时特征提取结果保存目录（默认: FeatureExtract/features_output）')
     parser.add_argument('--attention-output', default=None,
                         help='注意力检测结果保存目录（默认: Attention/attention_output）')
+    parser.add_argument('--cl-output', default=None,
+                        help='认知负荷检测结果保存目录（默认: CognitiveLoad/cl_output）')
     parser.add_argument('--epoch-seconds', type=float, default=1.0,
                         help='特征提取 epoch 长度（秒），默认 1.0')
     parser.add_argument('--no-visualize', action='store_true',
@@ -107,6 +113,7 @@ def main():
     WINDOW_SECONDS: float = args.window_seconds
     FEATURE_OUTPUT: str = args.feature_output or str(_FEATURE_DIR / "features_output")
     ATTENTION_OUTPUT: str = args.attention_output or str(_ATTENTION_DIR / "attention_output")
+    CL_OUTPUT: str = args.cl_output or str(_COGLOAD_DIR / "cl_output")
     EPOCH_SECONDS: float = args.epoch_seconds
     ENABLE_VISUALIZE: bool = not args.no_visualize
     VIZ_PORT: int = args.viz_port
@@ -167,7 +174,7 @@ def main():
             logging.error(f"查找 {s_type} 数据流时发生错误: {str(e)}", exc_info=True)
     if not inlets:
         logging.error("未找到任何主要数据流（如 EEG）。请确保设备已连接并处于运行状态。")
-        return
+        #return
     # --- 创建 TimestampCorrector 和 DataSaver ---
     correctors: Dict[str, TimestampCorrector] = {}
     savers: Dict[str, DataSaver] = {}
@@ -207,10 +214,11 @@ def main():
             from history_reader import HistoryReader
             from history_api    import HistoryAPI
             history_api = HistoryAPI(HistoryReader({
-                "raw":       args.output_dir,
-                "processed": PROCESSED_OUTPUT,
-                "features":  FEATURE_OUTPUT,
-                "attention": ATTENTION_OUTPUT,
+                "raw":            args.output_dir,
+                "processed":      PROCESSED_OUTPUT,
+                "features":       FEATURE_OUTPUT,
+                "attention":      ATTENTION_OUTPUT,
+                "cognitive_load": CL_OUTPUT,
             }))
         except ImportError:
             logging.warning("history_reader / history_api 未找到，历史数据功能不可用")
@@ -224,6 +232,7 @@ def main():
     processors: Dict[str, RealTimeEEGProcessor] = {}
     feat_extractors: Dict[str, RealTimeFeatureExtractor] = {}
     attn_detectors: Dict[str, RealTimeAttentionDetector] = {}
+    cl_detectors: Dict[str, RealTimeCognitiveLoadDetector] = {}
     if ENABLE_REALTIME:
         for s_type, inlet in inlets.items():
             if stream_details[s_type]['channel_count'] != 4:
@@ -249,9 +258,14 @@ def main():
                 smooth_window=5,
                 attention_output_dir=ATTENTION_OUTPUT,
             )
+            cl_detectors[s_type] = RealTimeCognitiveLoadDetector(
+                smooth_window=5,
+                output_dir=CL_OUTPUT,
+            )
             logging.info(f"  {s_type} 实时处理器已启动，窗口={WINDOW_SECONDS}s → {PROCESSED_OUTPUT}")
             logging.info(f"  {s_type} 实时特征提取器已启动，epoch={EPOCH_SECONDS}s → {FEATURE_OUTPUT}")
             logging.info(f"  {s_type} 注意力检测器已启动，平滑窗口=5 epoch")
+            logging.info(f"  {s_type} 认知负荷检测器已启动，平滑窗口=5 epoch → {CL_OUTPUT}")
     # --- 主数据采集循环 ---
     try:
         logging.info("\n--- 开始记录数据 ---")
@@ -285,12 +299,18 @@ def main():
                                     if s_type in feat_extractors:
                                         df_feat = feat_extractors[s_type].add(df_proc)
                                         attn = None
-                                        if s_type in attn_detectors and df_feat is not None and not df_feat.empty:
-                                            attn = attn_detectors[s_type].add(df_feat)
+                                        cl   = None
+                                        if df_feat is not None and not df_feat.empty:
+                                            if s_type in attn_detectors:
+                                                attn = attn_detectors[s_type].add(df_feat)
+                                            if s_type in cl_detectors:
+                                                cl = cl_detectors[s_type].add(df_feat)
                                         if visualizer and df_feat is not None and not df_feat.empty:
                                             visualizer.add_features(s_type, df_feat)
                                         if visualizer and attn is not None:
                                             visualizer.add_attention(attn)
+                                        if visualizer and cl is not None:
+                                            visualizer.add_cognitive_load(cl)
                                         
                         total_samples_collected[s_type] += len(samples)
                         if total_samples_collected[s_type] % 1000 == 0:
@@ -321,6 +341,9 @@ def main():
             if s_type in attn_detectors:
                 attn_detectors[s_type].close()
                 logging.info(f"  {s_type} 注意力数据已保存到: {os.path.abspath(ATTENTION_OUTPUT)}")
+            if s_type in cl_detectors:
+                cl_detectors[s_type].close()
+                logging.info(f"  {s_type} 认知负荷数据已保存到: {os.path.abspath(CL_OUTPUT)}")
         if visualizer:
             visualizer.close()
         # 记录程序结束信息

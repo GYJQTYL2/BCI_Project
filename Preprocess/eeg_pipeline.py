@@ -55,7 +55,7 @@ class EEGPreprocessPipeline:
         dc_offset_val: float = 800.0,
         hp_cutoff: float = 1,#0.5,
         lp_cutoff: float = 30.0,
-        amplitude_threshold: float = 100.0,
+        amplitude_threshold: float = 150.0,
         scale_method: Literal["zscore", "minmax"] = "zscore",
         channels: Optional[List[str]] = None,
         save_intermediates: bool = True,

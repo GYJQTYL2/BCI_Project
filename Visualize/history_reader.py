@@ -22,15 +22,16 @@ log = logging.getLogger(__name__)
 # session 目录命名格式：YYYYMMDD_HHMMSS
 _SESSION_RE = re.compile(r"^\d{8}_\d{6}$")
 
-# attention level 整数 → 字符串
+# level 整数 → 字符串（attention 和 cognitive_load 共用）
 _INT_TO_LEVEL = {0: "low", 1: "medium", 2: "high"}
 
 # 各数据类型的 segment 文件名前缀
 _FILE_PREFIX: Dict[str, str] = {
-    "raw":       "EEG",
-    "processed": "EEG_processed",
-    "features":  "features",
-    "attention": "attention",
+    "raw":            "EEG",
+    "processed":      "EEG_processed",
+    "features":       "features",
+    "attention":      "attention",
+    "cognitive_load": "cognitive_load",
 }
 
 # 特征面板只展示频段功率，通道与频段名称
@@ -174,6 +175,8 @@ class HistoryReader:
             return _to_features_dict(df, ts_fmt)
         elif data_type == "attention":
             return _to_attention_dict(df, ts_fmt)
+        elif data_type == "cognitive_load":
+            return _to_cognitive_load_dict(df, ts_fmt)
         return {}
 
 
@@ -330,6 +333,17 @@ def _to_attention_dict(df: pd.DataFrame, ts_fmt: list) -> dict:
     """attention → {"timestamps": [...], "attention_score": [...], "level": [...], ...}"""
     result: dict = {"timestamps": ts_fmt}
     for col in ("attention_score", "engagement_index", "theta_alpha_ratio"):
+        if col in df.columns:
+            result[col] = df[col].tolist()
+    if "level" in df.columns:
+        result["level"] = [_INT_TO_LEVEL.get(int(round(float(v))), "low") for v in df["level"]]
+    return result
+
+
+def _to_cognitive_load_dict(df: pd.DataFrame, ts_fmt: list) -> dict:
+    """cognitive_load → {"timestamps": [...], "cog_load_score": [...], "cognitive_load_index": [...], "level": [...]}"""
+    result: dict = {"timestamps": ts_fmt}
+    for col in ("cog_load_score", "cognitive_load_index"):
         if col in df.columns:
             result[col] = df[col].tolist()
     if "level" in df.columns:

@@ -1,7 +1,0 @@
-2026-05-11 14:31:36 - INFO - 程序启动，数据将保存到: /Users/admin/Downloads/BCIXmuse/BCI_Project/Xmuse-Connect/LSL/signal_data/20260511_143136
-2026-05-11 14:31:36 - INFO - 日志文件将保存到: /Users/admin/Downloads/BCIXmuse/BCI_Project/Xmuse-Connect/LSL/signal_data/20260511_143136/logs/collection_log_20260511_143136.log
-2026-05-11 14:31:36 - INFO - 
---- 开始查找和初始化 LSL 数据流 ---
-2026-05-11 14:31:36 - INFO - 尝试查找 EEG 数据流...
-2026-05-11 14:31:41 - WARNING - 未找到 EEG 数据流。
-2026-05-11 14:31:41 - ERROR - 未找到任何主要数据流（如 EEG）。请确保设备已连接并处于运行状态。

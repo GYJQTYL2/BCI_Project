@@ -86,6 +86,67 @@
       display: flex; align-items: center; justify-content: center;
       height: 300px; color: #3a4060; font-size: 14px;
     }
+
+    /* ── 学习报告 ── */
+    #report-toolbar {
+      display: flex; align-items: center; gap: 14px; padding: 14px 0 10px;
+    }
+    #btn-gen-report {
+      padding: 6px 20px; background: #253060; color: #7eb8f7;
+      border: none; border-radius: 4px; font-size: 12px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    #btn-gen-report:hover { background: #304080; }
+    #btn-gen-report:disabled { opacity: 0.4; cursor: default; }
+    #report-status { font-size: 11px; color: #5a6080; }
+    #report-meta   { font-size: 11px; color: #3a4060; margin-left: auto; }
+
+    .rpt-section {
+      background: #161b27; border: 1px solid #252b3d;
+      border-radius: 8px; padding: 18px 22px; margin-bottom: 16px;
+    }
+    .rpt-section-header {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px; font-weight: 600; color: #e0e8ff;
+      margin-bottom: 14px; padding-bottom: 10px;
+      border-bottom: 1px solid #252b3d;
+    }
+    .rpt-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    .rpt-metrics { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .rpt-metric {
+      flex: 1; min-width: 100px; background: #1a2035;
+      border: 1px solid #252b3d; border-radius: 6px; padding: 10px 14px;
+    }
+    .rpt-metric-label {
+      font-size: 10px; color: #5a6080; text-transform: uppercase;
+      letter-spacing: 0.8px; margin-bottom: 6px;
+    }
+    .rpt-metric-value { font-size: 22px; font-weight: 600; color: #e0e8ff; line-height: 1; }
+    .rpt-metric-value.clr-good    { color: #44e888; }
+    .rpt-metric-value.clr-warning { color: #ffb74d; }
+    .rpt-metric-value.clr-bad     { color: #e05252; }
+    .rpt-metric-value.clr-info    { color: #7eb8f7; }
+
+    .rpt-dist { margin-top: 8px; }
+    .rpt-dist-label { font-size: 13px; color: #6a7090; margin-bottom: 8px; }
+    .rpt-dist-track {
+      display: flex; height: 14px; border-radius: 6px; overflow: hidden;
+      background: #1a2035;
+    }
+    .rpt-dist-legend {
+      display: flex; gap: 20px; margin-top: 9px;
+    }
+    .rpt-dist-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #8090b0; }
+    .rpt-dist-dot  { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+    .rpt-rec {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 0; border-bottom: 1px solid #1a2035;
+    }
+    .rpt-rec:last-child { border-bottom: none; }
+    .rpt-rec-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+    .rpt-rec-text { font-size: 13px; color: #c0c8dc; line-height: 1.6; }
   </style>
 </head>
 <body>
@@ -119,10 +180,12 @@
 
 <!-- 数据类型标签页 -->
 <div id="type-tabs">
-  <div class="type-tab active" data-type="raw"       onclick="switchType('raw')">原始 EEG</div>
-  <div class="type-tab"        data-type="processed" onclick="switchType('processed')">预处理 EEG</div>
-  <div class="type-tab"        data-type="features"  onclick="switchType('features')">特征分析</div>
-  <div class="type-tab"        data-type="attention" onclick="switchType('attention')">注意力分析</div>
+  <div class="type-tab active" data-type="raw"            onclick="switchType('raw')">原始 EEG</div>
+  <div class="type-tab"        data-type="processed"     onclick="switchType('processed')">预处理 EEG</div>
+  <div class="type-tab"        data-type="features"      onclick="switchType('features')">特征分析</div>
+  <div class="type-tab"        data-type="attention"     onclick="switchType('attention')">注意力分析</div>
+  <div class="type-tab"        data-type="cognitive_load" onclick="switchType('cognitive_load')">认知负荷</div>
+  <div class="type-tab"        data-type="report"        onclick="switchType('report')">学习报告</div>
 </div>
 
 <!-- 图表区 -->
@@ -150,6 +213,57 @@
     <div class="chart-block"><div id="chart-attn-score"   style="height:260px;"></div></div>
     <div class="chart-block"><div id="chart-attn-indices" style="height:260px;"></div></div>
     <div class="chart-block"><div id="chart-attn-bands"   style="height:260px;"></div></div>
+  </div>
+
+  <!-- 认知负荷 -->
+  <div id="panel-cognitive_load" class="panel">
+    <div class="chart-block"><div id="chart-cl-score"   style="height:300px;"></div></div>
+    <div class="chart-block"><div id="chart-cl-indices" style="height:260px;"></div></div>
+  </div>
+
+  <!-- 学习报告 -->
+  <div id="panel-report" class="panel">
+    <div id="report-toolbar">
+      <button id="btn-gen-report" onclick="generateReport()">生成学习报告</button>
+      <span id="report-status"></span>
+      <span id="report-meta"></span>
+    </div>
+    <div id="report-body" style="display:none">
+      <!-- 注意力分析报告 -->
+      <div class="rpt-section">
+        <div class="rpt-section-header">
+          <span class="rpt-dot" style="background:#7eb8f7"></span>注意力分析报告
+        </div>
+        <div class="rpt-metrics" id="rpt-attn-metrics"></div>
+        <div class="rpt-dist" id="rpt-attn-dist"></div>
+        <div id="chart-rpt-attn-heatmap" style="height:90px;margin-top:14px;"></div>
+        <div id="markers-attn-timeline"></div>
+      </div>
+      <!-- 认知负荷分析报告 -->
+      <div class="rpt-section">
+        <div class="rpt-section-header">
+          <span class="rpt-dot" style="background:#ce93d8"></span>认知负荷分析报告
+        </div>
+        <div class="rpt-metrics" id="rpt-cl-metrics"></div>
+        <div class="rpt-dist" id="rpt-cl-dist"></div>
+        <div id="chart-rpt-cl-heatmap" style="height:90px;margin-top:14px;"></div>
+        <div id="markers-cl-timeline"></div>
+      </div>
+      <!-- 学习情况与效果 -->
+      <div class="rpt-section">
+        <div class="rpt-section-header">
+          <span class="rpt-dot" style="background:#44e888"></span>学习情况与效果
+        </div>
+        <div class="rpt-metrics" id="rpt-learn-metrics"></div>
+      </div>
+      <!-- 建议 -->
+      <div class="rpt-section">
+        <div class="rpt-section-header">
+          <span class="rpt-dot" style="background:#ffb74d"></span>建议
+        </div>
+        <div id="rpt-recs-list"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -255,6 +369,25 @@ function ensureCharts(type) {
         type:"scatter" })),
       makeLayout("频段功率趋势 · 四通道均值", "时间 (HH:MM:SS.mmm)", "功率 (μV²/Hz)"), CFG);
   }
+  else if (type === "cognitive_load") {
+    Plotly.newPlot("chart-cl-score",
+      [
+        { x:[], y:[], mode:"lines", name:"认知负荷得分",
+          line:{ color:"#ce93d8", width:2 }, type:"scatter" },
+      ],
+      makeLayout("认知负荷得分趋势  ·  θ/α sigmoid 归一化 [0, 1]",
+                 "时间 (HH:MM:SS.mmm)", "得分",
+                 { yaxis:{ range:[0,1], color:"#8090b0", gridcolor:"#1e2538",
+                           zerolinecolor:"#252b3d",
+                           tickfont:{ size:11, color:"#8090b0" },
+                           title:{ text:"得分", font:{ size:12, color:"#c0ceee" }, standoff:12 } } }), CFG);
+    Plotly.newPlot("chart-cl-indices",
+      [
+        { x:[], y:[], mode:"lines", name:"θ/α 指数 (CI)",
+          line:{ color:"#80cbc4", width:2 }, type:"scatter" },
+      ],
+      makeLayout("认知负荷原始指数趋势", "时间 (HH:MM:SS.mmm)", "指数值"), CFG);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -320,9 +453,21 @@ function renderAttention(data) {
     { x: ts, y: data.theta_alpha_ratio || [], mode:"lines",
       name:"θ/α 比值", line:{ color:"#e57373", width:2 }, type:"scatter" },
   ]);
+}
 
-  // 注意力面板的频段功率（若有特征数据可复用，此处绑定 attention 响应中不包含频段，留空）
-  // 若需要同步显示频段，可额外请求 features 数据
+function renderCognitiveLoad(data) {
+  if (!data?.timestamps?.length) return;
+  const ts = data.timestamps;
+
+  Plotly.react("chart-cl-score", [
+    { x: ts, y: data.cog_load_score || [], mode:"lines", name:"认知负荷得分",
+      line:{ color:"#ce93d8", width:2 }, type:"scatter" },
+  ]);
+
+  Plotly.react("chart-cl-indices", [
+    { x: ts, y: data.cognitive_load_index || [], mode:"lines", name:"θ/α 指数 (CI)",
+      line:{ color:"#80cbc4", width:2 }, type:"scatter" },
+  ]);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -353,12 +498,18 @@ function onSessionChange() {
   // 更新 tab 可用状态
   document.querySelectorAll(".type-tab").forEach(tab => {
     const t = tab.dataset.type;
+    // 学习报告：有 attention 或 cognitive_load 数据即可
+    if (t === "report") {
+      const has = session.types?.includes("attention") || session.types?.includes("cognitive_load");
+      tab.classList.toggle("disabled", !has);
+      return;
+    }
     const has = session.types?.includes(t);
     tab.classList.toggle("disabled", !has);
   });
 
   // 切到第一个可用类型
-  const firstAvail = ["raw","processed","features","attention"]
+  const firstAvail = ["raw","processed","features","attention","cognitive_load"]
     .find(t => session.types?.includes(t));
   if (firstAvail) switchType(firstAvail);
 }
@@ -418,10 +569,11 @@ async function loadData() {
     document.getElementById("empty-hint").style.display = "none";
 
     // 渲染
-    if      (type === "raw")       renderEEG("chart-raw",       RAW_CH,   data);
-    else if (type === "processed") renderEEG("chart-processed", CHANNELS, data, PROC_OFFSET_SCALE);
-    else if (type === "features")  renderFeatures(data);
-    else if (type === "attention") renderAttention(data);
+    if      (type === "raw")            renderEEG("chart-raw",       RAW_CH,   data);
+    else if (type === "processed")     renderEEG("chart-processed", CHANNELS, data, PROC_OFFSET_SCALE);
+    else if (type === "features")      renderFeatures(data);
+    else if (type === "attention")     renderAttention(data);
+    else if (type === "cognitive_load") renderCognitiveLoad(data);
 
     setStatus(`已加载 ${pts} 个数据点`);
   } catch(e) {
@@ -441,10 +593,359 @@ function switchType(type) {
     tab.classList.toggle("active", tab.dataset.type === type));
   document.querySelectorAll(".panel").forEach(p =>
     p.classList.toggle("active", p.id === `panel-${type}`));
+
+  // 切换到学习报告时，若会话已选中则自动生成
+  if (type === "report") {
+    const sid = document.getElementById("sel-session").value;
+    if (sid) generateReport();
+  }
 }
 
 function setStatus(msg) {
   document.getElementById("load-status").textContent = msg;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 学习报告
+// ═══════════════════════════════════════════════════════════════════
+const TREND_LABEL = { improving: "上升", declining: "下降", stable: "稳定" };
+const TREND_COLOR = { improving: "clr-good", declining: "clr-warning", stable: "clr-info" };
+const REC_COLORS  = { good: "#44e888", warning: "#ffb74d", info: "#7eb8f7", fatigue: "#e05252", learning: "#ce93d8", general: "#5a6080" };
+
+async function generateReport() {
+  const sid   = document.getElementById("sel-session").value;
+  const start = datetimeLocalToTs(document.getElementById("inp-start").value);
+  const end   = datetimeLocalToTs(document.getElementById("inp-end").value);
+  if (!sid) { setReportStatus("请先选择会话"); return; }
+
+  const btn = document.getElementById("btn-gen-report");
+  btn.disabled = true;
+  setReportStatus("分析中…");
+  document.getElementById("report-body").style.display = "none";
+
+  try {
+    const params = new URLSearchParams({ session: sid });
+    if (start != null) params.set("start", start);
+    if (end   != null) params.set("end",   end);
+
+    const res  = await fetch(`/history/report?${params}`);
+    const data = await res.json();
+
+    if (data.error) { setReportStatus("错误: " + data.error); return; }
+
+    renderReport(data);
+    document.getElementById("report-body").style.display = "block";
+    // 热力图需在容器可见且完成布局后初始化
+    requestAnimationFrame(() => {
+      if (data.attention_series) renderReportAttnHeatmap(data.attention_series);
+      if (data.cl_series)        renderReportCLHeatmap(data.cl_series);
+      if (data.markers?.length) {
+        if (data.attention_series?.timestamps?.length)
+          renderMarkersTimeline("markers-attn-timeline", data.markers, data.attention_series.timestamps);
+        if (data.cl_series?.timestamps?.length)
+          renderMarkersTimeline("markers-cl-timeline",   data.markers, data.cl_series.timestamps);
+      }
+    });
+    setReportStatus("");
+    document.getElementById("report-meta").textContent =
+      `生成时间: ${data.generated_at}  ·  会话时长: ${data.duration}`;
+  } catch(e) {
+    setReportStatus("请求失败: " + e.message);
+    console.error("generateReport:", e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function setReportStatus(msg) {
+  document.getElementById("report-status").textContent = msg;
+}
+
+function renderReport(data) {
+  if (data.attention)      renderReportAttention(data.attention);
+  if (data.cognitive_load) renderReportCL(data.cognitive_load);
+  renderReportLearning(data.learning || {});
+  renderReportRecs(data.recommendations || []);
+}
+
+function renderReportAttention(attn) {
+  const trendClass = TREND_COLOR[attn.trend] || "clr-info";
+  document.getElementById("rpt-attn-metrics").innerHTML = [
+    rptMetric("平均得分", score(attn.mean_score), scoreColor(attn.mean_score)),
+    rptMetric("专注率",   pct(attn.focus_ratio),  scoreColor(attn.focus_ratio)),
+    rptMetric("峰值得分", score(attn.peak_score),  "clr-info"),
+    rptMetric("趋势",     TREND_LABEL[attn.trend] || "--", trendClass),
+    rptMetric("样本数",   attn.n_epochs ?? "--", ""),
+  ].join("");
+  document.getElementById("rpt-attn-dist").innerHTML =
+    makeDistBar(attn.level_distribution, "注意力等级分布");
+}
+
+function renderReportCL(cl) {
+  const trendClass = TREND_COLOR[cl.trend] || "clr-info";
+  document.getElementById("rpt-cl-metrics").innerHTML = [
+    rptMetric("平均得分",   score(cl.mean_score),         scoreColor(cl.mean_score)),
+    rptMetric("最优负荷率", pct(cl.optimal_load_ratio),   scoreColor(cl.optimal_load_ratio)),
+    rptMetric("过载率",     pct(cl.overload_ratio),       invertColor(cl.overload_ratio)),
+    rptMetric("趋势",       TREND_LABEL[cl.trend] || "--", trendClass),
+    rptMetric("样本数",     cl.n_epochs ?? "--", ""),
+  ].join("");
+  document.getElementById("rpt-cl-dist").innerHTML =
+    makeDistBar(cl.level_distribution, "认知负荷等级分布");
+}
+
+function renderReportLearning(learning) {
+  const grade = learning.grade || "--";
+  const gradeColor = { "优秀": "clr-good", "良好": "clr-good", "一般": "clr-warning", "待改善": "clr-bad" }[grade] || "";
+  const fatigueText  = learning.fatigue_detected ? "已检测到" : "未检测到";
+  const fatigueColor = learning.fatigue_detected ? "clr-warning" : "clr-good";
+  const onsetText = learning.fatigue_onset_ratio != null
+    ? `约 ${Math.round(learning.fatigue_onset_ratio * 100)}% 处` : "";
+
+  document.getElementById("rpt-learn-metrics").innerHTML = [
+    rptMetric("学习效率指数", score(learning.learning_efficiency_index), scoreColor(learning.learning_efficiency_index)),
+    rptMetric("疲劳状态",     fatigueText + (onsetText ? `<br><small style="font-size:11px;color:#8090b0">${onsetText}</small>` : ""), fatigueColor),
+    rptMetric("综合评级",     grade, gradeColor),
+  ].join("");
+}
+
+function renderReportRecs(recs) {
+  if (!recs.length) {
+    document.getElementById("rpt-recs-list").innerHTML =
+      '<p style="color:#3a4060;font-size:13px;padding:10px 0">暂无建议</p>';
+    return;
+  }
+  document.getElementById("rpt-recs-list").innerHTML = recs.map(r => {
+    const color = REC_COLORS[r.level] || REC_COLORS[r.type] || "#5a6080";
+    return `<div class="rpt-rec">
+      <span class="rpt-rec-dot" style="background:${color}"></span>
+      <span class="rpt-rec-text">${r.message}</span>
+    </div>`;
+  }).join("");
+}
+
+function renderReportAttnHeatmap(attn) {
+  if (!attn?.timestamps?.length || !attn.attention_score?.length) return;
+
+  // 超过 600 点时均匀降采样，热力图不需要原始密度
+  const MAX = 600;
+  let ts     = attn.timestamps;
+  let scores = attn.attention_score;
+  if (scores.length > MAX) {
+    const step = Math.ceil(scores.length / MAX);
+    ts     = ts.filter((_, i) => i % step === 0);
+    scores = scores.filter((_, i) => i % step === 0);
+  }
+
+  const COLORSCALE = [
+    [0.00, "#e05252"],
+    [0.35, "#ffb74d"],
+    [0.65, "#7eb8f7"],
+    [1.00, "#44e888"],
+  ];
+
+  Plotly.newPlot("chart-rpt-attn-heatmap", [{
+    type: "heatmap",
+    x: ts,
+    z: [scores],
+    colorscale: COLORSCALE,
+    zmin: 0, zmax: 1,
+    showscale: true,
+    colorbar: {
+      thickness: 10, len: 1,
+      tickvals: [0, 0.35, 0.65, 1],
+      ticktext: ["低", "中低", "中高", "高"],
+      tickfont: { size: 10, color: "#8090b0" },
+      outlinewidth: 0,
+    },
+    hovertemplate: "%{x}<br>注意力得分: %{z:.3f}<extra></extra>",
+  }], {
+    paper_bgcolor: "#1a1f30",
+    plot_bgcolor:  "#141828",
+    margin: { l: 6, r: 70, t: 4, b: 36 },
+    xaxis: {
+      color: "#8090b0", gridcolor: "#1e2538", zerolinecolor: "#252b3d",
+      tickfont: { size: 10, color: "#8090b0" },
+      title: { text: "时间", font: { size: 11, color: "#5a6080" }, standoff: 6 },
+    },
+    yaxis: { visible: false },
+  }, { responsive: true, displayModeBar: false });
+}
+
+function renderReportCLHeatmap(cl) {
+  if (!cl?.timestamps?.length || !cl.cog_load_score?.length) return;
+
+  const MAX = 600;
+  let ts     = cl.timestamps;
+  let scores = cl.cog_load_score;
+  if (scores.length > MAX) {
+    const step = Math.ceil(scores.length / MAX);
+    ts     = ts.filter((_, i) => i % step === 0);
+    scores = scores.filter((_, i) => i % step === 0);
+  }
+
+  const COLORSCALE = [
+    [0.00, "#44e888"],
+    [0.35, "#7eb8f7"],
+    [0.65, "#ffb74d"],
+    [1.00, "#e05252"],
+  ];
+
+  Plotly.newPlot("chart-rpt-cl-heatmap", [{
+    type: "heatmap",
+    x: ts,
+    z: [scores],
+    colorscale: COLORSCALE,
+    zmin: 0, zmax: 1,
+    showscale: true,
+    colorbar: {
+      thickness: 10, len: 1,
+      tickvals: [0, 0.35, 0.65, 1],
+      ticktext: ["低", "中低", "中高", "高"],
+      tickfont: { size: 10, color: "#8090b0" },
+      outlinewidth: 0,
+    },
+    hovertemplate: "%{x}<br>认知负荷得分: %{z:.3f}<extra></extra>",
+  }], {
+    paper_bgcolor: "#1a1f30",
+    plot_bgcolor:  "#141828",
+    margin: { l: 6, r: 70, t: 4, b: 36 },
+    xaxis: {
+      color: "#8090b0", gridcolor: "#1e2538", zerolinecolor: "#252b3d",
+      tickfont: { size: 10, color: "#8090b0" },
+      title: { text: "时间", font: { size: 11, color: "#5a6080" }, standoff: 6 },
+    },
+    yaxis: { visible: false },
+  }, { responsive: true, displayModeBar: false });
+}
+
+// margin-left/right 与 Plotly heatmap 的 margin.l/r 对齐（l:6, r:70）
+const _TIMELINE_COLORS = [
+  "#4fc3f7","#81c784","#ffb74d","#ce93d8",
+  "#4db6ac","#e57373","#7986cb","#80cbc4",
+];
+
+function renderMarkersTimeline(containerId, markers, seriesTimestamps) {
+  const el = document.getElementById(containerId);
+  if (!el || !seriesTimestamps?.length) return;
+
+  function hmsToSec(hms) {
+    const dot = hms.indexOf('.');
+    const msStr = dot >= 0 ? hms.slice(dot + 1) : '0';
+    const base  = dot >= 0 ? hms.slice(0, dot) : hms;
+    const [h, m, s] = base.split(':').map(Number);
+    return h * 3600 + m * 60 + s + parseInt(msStr.padEnd(3, '0')) / 1000;
+  }
+  function tsToHMS(ts) {
+    const d = new Date(ts * 1000);
+    const pad = n => n.toString().padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${d.getMilliseconds().toString().padStart(3, '0')}`;
+  }
+
+  const n = seriesTimestamps.length;
+  // Pre-compute seconds for binary search (avoids repeated string parsing)
+  const tsSec = seriesTimestamps.map(hmsToSec);
+
+  // Plotly downsampling params — must match renderReportAttnHeatmap / renderReportCLHeatmap
+  const PLOTLY_MAX = 600;
+  const pStep = Math.max(1, Math.ceil(n / PLOTLY_MAX));
+  // Actual number of Plotly categories after filter((_, i) => i % pStep === 0)
+  const nP = Math.floor((n - 1) / pStep) + 1;
+
+  // Map a time (seconds) → visual fraction [0, 1] matching Plotly's categorical axis.
+  // Plotly default range: [-0.5, nP-0.5]; category k center = (k+0.5)/nP.
+  // Binary search handles non-uniform EEG timestamp spacing (gaps, dropped packets).
+  function toFrac(sec) {
+    if (sec <= tsSec[0])      return 0.5 / nP;           // pin to first cell center
+    if (sec >= tsSec[n - 1]) return (nP - 0.5) / nP;    // pin to last cell center
+    let lo = 0, hi = n - 1;
+    while (lo + 1 < hi) {
+      const mid = (lo + hi) >> 1;
+      if (tsSec[mid] <= sec) lo = mid; else hi = mid;
+    }
+    const alpha = tsSec[hi] > tsSec[lo]
+      ? (sec - tsSec[lo]) / (tsSec[hi] - tsSec[lo]) : 0;
+    const catLo = Math.floor(lo / pStep);
+    const catHi = Math.min(Math.floor(hi / pStep), nP - 1);
+    return (catLo + 0.5) / nP + alpha * ((catHi - catLo) / nP);
+  }
+
+  const segments = markers.map((m, i) => {
+    if (m.start_ts == null || m.end_ts == null) return "";
+    const fStart = toFrac(hmsToSec(tsToHMS(m.start_ts)));
+    const fEnd   = toFrac(hmsToSec(tsToHMS(m.end_ts)));
+    if (fEnd <= fStart) return "";
+
+    const left  = Math.max(0, fStart * 100);
+    const width = Math.min(100 - left, (fEnd - fStart) * 100);
+    const color = _TIMELINE_COLORS[i % _TIMELINE_COLORS.length];
+    const tip   = `${m.content}  ${tsToHMS(m.start_ts).slice(0, 8)} – ${tsToHMS(m.end_ts).slice(0, 8)}`;
+    return `<div title="${tip}" style="
+      position:absolute; left:${left.toFixed(3)}%; width:${Math.max(0.5, width).toFixed(3)}%;
+      height:100%; background:${color}28; border-left:3px solid ${color};
+      box-sizing:border-box; display:flex; align-items:center;
+      padding:0 10px; overflow:hidden; cursor:default;
+    ">
+      <span style="font-size:14px; font-weight:600; color:${color};
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        ${m.content}
+      </span>
+    </div>`;
+  }).join("");
+
+  el.innerHTML = `
+    <div style="position:relative; height:46px; margin:26px 70px 6px 6px;
+      background:#151b2e; border-radius:5px; overflow:hidden; border:1px solid #252b3d;">
+      ${segments}
+    </div>
+    <div style="font-size:20px; color:#4a5070; margin:0 70px 6px 6px; padding-top:5px;">
+      课程内容
+    </div>`;
+}
+
+// ── 辅助构建函数 ──────────────────────────────────────────────────────────────
+function rptMetric(label, value, colorClass) {
+  return `<div class="rpt-metric">
+    <div class="rpt-metric-label">${label}</div>
+    <div class="rpt-metric-value ${colorClass}">${value}</div>
+  </div>`;
+}
+
+function makeDistBar(dist, label) {
+  if (!dist) return "";
+  const high   = (dist.high   ?? 0) * 100;
+  const medium = (dist.medium ?? 0) * 100;
+  const low    = (dist.low    ?? 0) * 100;
+  return `<div class="rpt-dist">
+    <div class="rpt-dist-label">${label}</div>
+    <div class="rpt-dist-track">
+      <div style="width:${high}%;background:#44e888"></div>
+      <div style="width:${medium}%;background:#7eb8f7"></div>
+      <div style="width:${low}%;background:#e05252"></div>
+    </div>
+    <div class="rpt-dist-legend">
+      <span class="rpt-dist-item"><span class="rpt-dist-dot" style="background:#44e888"></span>高 ${high.toFixed(0)}%</span>
+      <span class="rpt-dist-item"><span class="rpt-dist-dot" style="background:#7eb8f7"></span>中 ${medium.toFixed(0)}%</span>
+      <span class="rpt-dist-item"><span class="rpt-dist-dot" style="background:#e05252"></span>低 ${low.toFixed(0)}%</span>
+    </div>
+  </div>`;
+}
+
+function pct(v)   { return v != null ? (v * 100).toFixed(1) + "%" : "--"; }
+function score(v) { return v != null ? v.toFixed(3) : "--"; }
+
+function scoreColor(v) {
+  if (v == null) return "";
+  if (v >= 0.7) return "clr-good";
+  if (v >= 0.4) return "clr-warning";
+  return "clr-bad";
+}
+
+function invertColor(v) {
+  if (v == null) return "";
+  if (v >= 0.4) return "clr-bad";
+  if (v >= 0.2) return "clr-warning";
+  return "clr-good";
 }
 
 // ═══════════════════════════════════════════════════════════════════

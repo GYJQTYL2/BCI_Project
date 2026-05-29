@@ -65,6 +65,12 @@ class DataBridge:
         self._attn_tar: deque = deque(maxlen=max_feat)
         self._attn_level: deque = deque(maxlen=max_feat)
 
+        # 认知负荷缓冲
+        self._cl_ts: deque = deque(maxlen=max_feat)
+        self._cl_score: deque = deque(maxlen=max_feat)
+        self._cl_ci: deque = deque(maxlen=max_feat)
+        self._cl_level: deque = deque(maxlen=max_feat)
+
     # ── 写入接口（采集线程调用）─────────────────────────────────────────────
 
     def add_raw(self, timestamps: List[float], samples: List[List[float]]) -> None:
@@ -108,6 +114,16 @@ class DataBridge:
             self._attn_tar.append(float(result.get("theta_alpha_ratio", 0.0)))
             self._attn_level.append(str(result.get("level", "low")))
 
+    def add_cognitive_load(self, result: dict) -> None:
+        """写入一条认知负荷检测结果（来自 RealTimeCognitiveLoadDetector.add()）"""
+        if not result:
+            return
+        with self._lock:
+            self._cl_ts.append(float(result.get("timestamp", 0.0)))
+            self._cl_score.append(float(result.get("cog_load_score", 0.0)))
+            self._cl_ci.append(float(result.get("cognitive_load_index", 0.0)))
+            self._cl_level.append(str(result.get("level", "low")))
+
     # ── 读取快照（WebSocket 线程调用）────────────────────────────────────────
 
     def snapshot(self) -> dict:
@@ -136,6 +152,12 @@ class DataBridge:
                     "engagement_index": list(self._attn_ei),
                     "theta_alpha_ratio": list(self._attn_tar),
                     "level": list(self._attn_level),
+                },
+                "cognitive_load": {
+                    "timestamps": _fmt_ts(list(self._cl_ts)),
+                    "cog_load_score": list(self._cl_score),
+                    "cognitive_load_index": list(self._cl_ci),
+                    "level": list(self._cl_level),
                 },
             }
 
