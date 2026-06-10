@@ -22,6 +22,7 @@ from data_baseline import correct_dc_offset, correct_baseline_channelwise
 from data_filter import filter_eeg_frame
 from data_AmpRemove import interpolate_outliers
 from data_scaler import normalize_channel, standardize_channel
+from asr_cleaner import ASRCleaner
 
 
 class EEGPreprocessPipeline:
@@ -60,6 +61,7 @@ class EEGPreprocessPipeline:
         channels: Optional[List[str]] = None,
         save_intermediates: bool = True,
         output_suffix: str = "_preprocessed",
+        asr_cleaner: Optional["ASRCleaner"] = None,
     ):
         self.baseline_method = baseline_method
         self.baseline_window = baseline_window
@@ -71,6 +73,7 @@ class EEGPreprocessPipeline:
         self.channels = channels or ["CH1", "CH2", "CH3", "CH4"]
         self.save_intermediates = save_intermediates
         self.output_suffix = output_suffix
+        self.asr_cleaner = asr_cleaner
 
     # ── Step 1 ────────────────────────────────
     def _step1_clean(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -120,6 +123,9 @@ class EEGPreprocessPipeline:
         # 滤波前：高阈值只拦截电极脱落/极端眨眼（原始信号含慢漂移，不能用小阈值）
         df, _ = interpolate_outliers(df, 800.0)
         df = self._step3_filter(df)
+        # ASR：去 EOG + EMG（仅在训练好基线后生效）
+        if self.asr_cleaner is not None and self.asr_cleaner.is_ready:
+            df = self.asr_cleaner.clean(df)
         # 滤波后：低阈值清理残留尖峰（高通已去慢漂移，信号幅值已降至 ±100 µV 级别）
         #df, _ = self._step4_amp_remove(df)
         #df = self._step5_scale(df)

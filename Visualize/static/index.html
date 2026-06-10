@@ -20,6 +20,19 @@
     #status-dot.connected { background: #44e888; box-shadow: 0 0 8px #44e888; }
     #status-text { font-size: 12px; color: #6a7090; }
 
+    #btn-baseline {
+      font-size: 12px; padding: 5px 14px; border-radius: 4px; cursor: pointer;
+      border: 1px solid #44e888; color: #44e888; background: transparent;
+      transition: all 0.2s;
+    }
+    #btn-baseline:hover:not(:disabled) { background: #44e88822; }
+    #btn-baseline:disabled { border-color: #3a4060; color: #3a4060; cursor: default; }
+    #btn-baseline.recording {
+      border-color: #ffb74d; color: #ffb74d; animation: pulse 1s infinite;
+    }
+    #baseline-hint { font-size: 11px; color: #6a7090; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+
     #tabs {
       display: flex; padding: 0 28px; background: #161b27;
       border-bottom: 2px solid #252b3d;
@@ -60,6 +73,8 @@
   <h1>BCI 实时脑电监测</h1>
   <div id="status-dot"></div>
   <span id="status-text">未连接</span>
+  <button id="btn-baseline" onclick="startBaseline()">录制基线</button>
+  <span id="baseline-hint"></span>
   <a href="/history.html" style="font-size:11px;color:#5a6080;text-decoration:none;margin-left:auto;
      padding:4px 10px;border:1px solid #252b3d;border-radius:4px;">历史数据</a>
 </div>
@@ -477,6 +492,37 @@ function updateCognitiveLoadPanel(cl) {
 }
 
 // ══════════════════════════════════════════════════════
+// 基线录制
+// ══════════════════════════════════════════════════════
+let _baselineTimer = null;
+
+function updateBaselineUI(status) {
+  const btn  = document.getElementById("btn-baseline");
+  const hint = document.getElementById("baseline-hint");
+  if (status === "recording") {
+    btn.textContent = "录制中…";
+    btn.classList.add("recording");
+    btn.disabled = true;
+  } else if (status === "ready") {
+    btn.textContent = "重新录制";
+    btn.classList.remove("recording");
+    btn.disabled = false;
+    hint.textContent = "ASR 已激活";
+  } else {
+    btn.textContent = "录制基线";
+    btn.classList.remove("recording");
+    btn.disabled = false;
+    hint.textContent = "";
+  }
+}
+
+function startBaseline() {
+  fetch("/baseline/start", { method: "POST" })
+    .then(r => { if (r.ok) updateBaselineUI("recording"); })
+    .catch(() => {});
+}
+
+// ══════════════════════════════════════════════════════
 // WebSocket
 // ══════════════════════════════════════════════════════
 let ws = null, reconnectTimer = null, _dbgT = 0, _snap = null;
@@ -508,6 +554,7 @@ function connect() {
     if (d.processed)      updateEEGChart("chart-processed", CHANNELS, d.processed.timestamps, d.processed, PROC_OFFSET_SCALE);
     if (d.attention)      updateAttentionPanel(d.attention, d.features);
     if (d.cognitive_load) updateCognitiveLoadPanel(d.cognitive_load);
+    if (d.baseline_status != null) updateBaselineUI(d.baseline_status);
   };
 }
 connect();

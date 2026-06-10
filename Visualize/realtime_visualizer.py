@@ -63,15 +63,22 @@ class RealTimeVisualizer:
 
     # ── 生命周期 ──────────────────────────────────────────────────────────
 
-    def start(self, port: int = 8765, history_api=None) -> None:
+    def start(self, port: int = 8765, history_api=None, processor=None) -> None:
         """启动 WebSocket 服务（daemon 线程，不阻塞主循环）
 
         参数:
             port        : 监听端口
             history_api : HistoryAPI 实例（可选），由调用方构建后透传给 WebSocketServer
+            processor   : RealTimeEEGProcessor 实例（可选），用于基线录制接口
         """
+        # 同步初始 ASR 基线状态
+        if processor is not None and hasattr(processor, "_asr"):
+            status = "ready" if processor._asr.is_ready else "idle"
+            self._bridge.set_baseline_status(status)
+
         self._server = WebSocketServer(
-            self._bridge, port=port, push_hz=self._push_hz, history_api=history_api
+            self._bridge, port=port, push_hz=self._push_hz,
+            history_api=history_api, processor=processor,
         )
         self._server.start()
         log.info(f"可视化面板已启动: http://localhost:{port}")
@@ -81,6 +88,14 @@ class RealTimeVisualizer:
         if self._server:
             self._server.stop()
         log.info("RealTimeVisualizer 已关闭")
+
+    def set_processor(self, processor) -> None:
+        """绑定 RealTimeEEGProcessor（可在 start() 后调用），用于基线录制接口"""
+        if self._server:
+            self._server.set_processor(processor)
+        if hasattr(processor, "_asr"):
+            status = "ready" if processor._asr.is_ready else "idle"
+            self._bridge.set_baseline_status(status)
 
     # ── 数据写入接口 ──────────────────────────────────────────────────────
 

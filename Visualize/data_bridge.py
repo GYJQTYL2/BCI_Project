@@ -71,6 +71,9 @@ class DataBridge:
         self._cl_ci: deque = deque(maxlen=max_feat)
         self._cl_level: deque = deque(maxlen=max_feat)
 
+        # ASR 基线状态
+        self._baseline_status: str = "idle"   # idle | recording | ready
+
     # ── 写入接口（采集线程调用）─────────────────────────────────────────────
 
     def add_raw(self, timestamps: List[float], samples: List[List[float]]) -> None:
@@ -124,6 +127,11 @@ class DataBridge:
             self._cl_ci.append(float(result.get("cognitive_load_index", 0.0)))
             self._cl_level.append(str(result.get("level", "low")))
 
+    def set_baseline_status(self, status: str) -> None:
+        """更新 ASR 基线状态：idle | recording | ready"""
+        with self._lock:
+            self._baseline_status = status
+
     # ── 读取快照（WebSocket 线程调用）────────────────────────────────────────
 
     def snapshot(self) -> dict:
@@ -131,6 +139,7 @@ class DataBridge:
         with self._lock:
             attn_ts = list(self._attn_ts)
             return {
+                "baseline_status": self._baseline_status,
                 "raw": {
                     "timestamps": _fmt_ts(list(self._raw_ts)),
                     **{ch: list(self._raw_ch[ch]) for ch in RAW_CHANNELS},

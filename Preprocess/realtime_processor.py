@@ -29,6 +29,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 from eeg_pipeline import EEGPreprocessPipeline
+from asr_cleaner import ASRCleaner
 
 _LSL_DIR = Path(__file__).parent.parent / "Xmuse-Connect" / "LSL"
 sys.path.insert(0, str(_LSL_DIR))
@@ -78,7 +79,14 @@ class RealTimeEEGProcessor:
     ):
         self.nominal_srate = nominal_srate
         self.window_size = int(window_seconds * nominal_srate)
-        self.pipeline = pipeline or EEGPreprocessPipeline()
+
+        # ASR：尝试加载已有基线，没有则先不激活
+        self._asr = ASRCleaner(sfreq=nominal_srate)
+        loaded = self._asr.load_baseline()
+        if not loaded:
+            log.info("未找到 ASR 基线文件，请录制基线后 ASR 才会生效")
+
+        self.pipeline = pipeline or EEGPreprocessPipeline(asr_cleaner=self._asr)
         self._input_corrector = corrector or _IdentityCorrector()
 
         session_name = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -97,6 +105,7 @@ class RealTimeEEGProcessor:
         self._buf_samples: List[List[float]] = []
         self._buf_timestamps: List[float] = []
         self._window_idx = 0
+        self._recording_baseline = False
 
         log.info(
             f"RealTimeEEGProcessor 初始化: "
@@ -104,6 +113,27 @@ class RealTimeEEGProcessor:
         )
 
     # ── 公开接口（与 DataSaver.add / close 兼容）─────────────────────────
+
+    def start_baseline(self) -> None:
+        """开始录制 ASR 基线，期间采集到的数据会同时喂入训练缓冲"""
+        self._asr.start_recording()
+        self._recording_baseline = True
+        log.info("ASR 基线录制开始，请保持安静闭眼...")
+
+    def stop_baseline(self, save_path: Optional[str] = None) -> bool:
+        """
+        停止录制并训练 ASR，保存基线文件。
+        返回 True = 训练成功。
+        """
+        self._recording_baseline = False
+        try:
+            n = self._asr.finish_recording()
+            self._asr.save_baseline(save_path)
+            log.info(f"ASR 基线训练完成 ({n/self.nominal_srate:.1f}s)，已激活")
+            return True
+        except Exception as e:
+            log.error(f"ASR 基线训练失败: {e}")
+            return False
 
     def add(
         self, samples: List[List[float]], lsl_timestamps: List[float]
@@ -124,6 +154,15 @@ class RealTimeEEGProcessor:
         corrected = self._input_corrector.correct(lsl_timestamps)
         self._buf_samples.extend(samples)
         self._buf_timestamps.extend(corrected.tolist())
+
+        # 基线录制模式：同时喂入 ASR 训练缓冲
+        if self._recording_baseline:
+            df_raw = self._build_df(samples, corrected.tolist())
+            # build_df 用原始列名，需要 clean 后才有 CH1–CH4
+            from data_clean import clean_eeg_frame
+            df_clean = clean_eeg_frame(df_raw)
+            if not df_clean.empty:
+                self._asr.feed_baseline(df_clean)
 
         processed: List[pd.DataFrame] = []
         while len(self._buf_samples) >= self.window_size:

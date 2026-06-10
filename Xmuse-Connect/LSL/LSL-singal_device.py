@@ -262,6 +262,10 @@ def main():
                 smooth_window=5,
                 output_dir=CL_OUTPUT,
             )
+        # 把第一个 EEG processor 绑定到可视化服务器，用于基线录制接口
+        eeg_processor = next(iter(processors.values()), None)
+        if eeg_processor is not None and ENABLE_VISUALIZE:
+            visualizer.set_processor(eeg_processor)
             logging.info(f"  {s_type} 实时处理器已启动，窗口={WINDOW_SECONDS}s → {PROCESSED_OUTPUT}")
             logging.info(f"  {s_type} 实时特征提取器已启动，epoch={EPOCH_SECONDS}s → {FEATURE_OUTPUT}")
             logging.info(f"  {s_type} 注意力检测器已启动，平滑窗口=5 epoch")

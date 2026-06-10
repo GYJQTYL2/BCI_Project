@@ -30,11 +30,13 @@ class WebSocketServer:
         port: int = 8765,
         push_hz: float = 10.0,
         history_api=None,       # HistoryAPI 实例（可选），注入历史数据路由
+        processor=None,         # RealTimeEEGProcessor 实例（可选），用于基线录制
     ):
         self._bridge = bridge
         self._port = port
         self._interval = 1.0 / push_hz
         self._history_api = history_api
+        self._processor = processor
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stop_event: asyncio.Event | None = None
@@ -46,6 +48,10 @@ class WebSocketServer:
     def stop(self) -> None:
         if self._loop and self._stop_event:
             self._loop.call_soon_threadsafe(self._stop_event.set)
+
+    def set_processor(self, processor) -> None:
+        """绑定 RealTimeEEGProcessor，可在 start() 后调用"""
+        self._processor = processor
 
     # ── 内部实现 ──────────────────────────────────────────────────────────
 
@@ -96,10 +102,36 @@ class WebSocketServer:
                 print(f"[ws_server] 客户端已断开，当前连接数: {len(clients)}")
             return ws
 
+        async def handle_baseline_start(request):
+            if self._processor is None:
+                return web.Response(status=503, text="processor not available")
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._processor.start_baseline)
+            self._bridge.set_baseline_status("recording")
+
+            # 30 秒后自动停止
+            async def _auto_stop():
+                await asyncio.sleep(30)
+                ok = await loop.run_in_executor(None, self._processor.stop_baseline)
+                self._bridge.set_baseline_status("ready" if ok else "idle")
+
+            asyncio.create_task(_auto_stop())
+            return web.Response(text="ok")
+
+        async def handle_baseline_stop(request):
+            if self._processor is None:
+                return web.Response(status=503, text="processor not available")
+            loop = asyncio.get_event_loop()
+            ok = await loop.run_in_executor(None, self._processor.stop_baseline)
+            self._bridge.set_baseline_status("ready" if ok else "idle")
+            return web.json_response({"ok": ok})
+
         app = web.Application()
         app.router.add_get("/", handle_index)
         app.router.add_get("/favicon.ico", handle_favicon)
         app.router.add_get("/ws", handle_ws)
+        app.router.add_post("/baseline/start", handle_baseline_start)
+        app.router.add_post("/baseline/stop", handle_baseline_stop)
         if self._history_api is not None:
             self._history_api.register_routes(app)
         app.router.add_get("/{filename}", handle_static)
