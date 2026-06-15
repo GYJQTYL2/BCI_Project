@@ -233,6 +233,7 @@ def main():
     feat_extractors: Dict[str, RealTimeFeatureExtractor] = {}
     attn_detectors: Dict[str, RealTimeAttentionDetector] = {}
     cl_detectors: Dict[str, RealTimeCognitiveLoadDetector] = {}
+    eeg_processor = None  # 第一个 EEG processor，供 IMU 路由和基线录制使用
     if ENABLE_REALTIME:
         for s_type, inlet in inlets.items():
             if stream_details[s_type]['channel_count'] != 4:
@@ -295,6 +296,12 @@ def main():
                         savers[s_type].add(samples, corrected_timestamps.tolist())
                         if visualizer:
                             visualizer.add_raw(s_type, samples, corrected_timestamps.tolist())
+                        # IMU → 路由到 EEG processor 用于运动伪迹去除
+                        if s_type == "IMU" and eeg_processor is not None:
+                            eeg_processor.add_imu(
+                                samples, corrected_timestamps.tolist(),
+                                ch_names=stream_details[s_type].get("channel_names"),
+                            )
                         if s_type in processors:
                             for df_proc in processors[s_type].add(samples, lsl_timestamps):
                                 if df_proc is not None and not df_proc.empty:

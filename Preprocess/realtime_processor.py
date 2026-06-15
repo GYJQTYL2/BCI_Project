@@ -30,6 +30,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 from eeg_pipeline import EEGPreprocessPipeline
 from asr_cleaner import ASRCleaner
+from imu_artifact_remover import IMUArtifactRemover
 
 _LSL_DIR = Path(__file__).parent.parent / "Xmuse-Connect" / "LSL"
 sys.path.insert(0, str(_LSL_DIR))
@@ -107,12 +108,38 @@ class RealTimeEEGProcessor:
         self._window_idx = 0
         self._recording_baseline = False
 
+        # IMU 缓冲（来自 LSL IMU 流，用于运动伪迹去除）
+        self._imu_remover = IMUArtifactRemover()
+        self._imu_buf_samples: List[List[float]] = []
+        self._imu_buf_timestamps: List[float] = []
+        self._imu_channels: List[str] = []
+
         log.info(
             f"RealTimeEEGProcessor 初始化: "
             f"输出→{save_dir}, 窗口={window_seconds}s ({self.window_size} 样本)"
         )
 
     # ── 公开接口（与 DataSaver.add / close 兼容）─────────────────────────
+
+    def add_imu(
+        self, samples: List[List[float]], lsl_timestamps: List[float],
+        ch_names: Optional[List[str]] = None,
+    ) -> None:
+        """
+        接收一批 IMU 样本（AccX/AccY/AccZ/GyrX/GyrY/GyrZ），缓存供 EEG 窗口使用。
+        与 add() 并行调用，不需要对齐。
+        """
+        if not samples:
+            return
+        if ch_names and not self._imu_channels:
+            self._imu_channels = ch_names
+        self._imu_buf_samples.extend(samples)
+        self._imu_buf_timestamps.extend(lsl_timestamps)
+        # 只保留最近 30 秒的 IMU 数据，避免内存无限增长
+        max_imu = int(52 * 30)
+        if len(self._imu_buf_samples) > max_imu:
+            self._imu_buf_samples = self._imu_buf_samples[-max_imu:]
+            self._imu_buf_timestamps = self._imu_buf_timestamps[-max_imu:]
 
     def start_baseline(self) -> None:
         """开始录制 ASR 基线，期间采集到的数据会同时喂入训练缓冲"""
@@ -195,6 +222,13 @@ class RealTimeEEGProcessor:
                 log.warning(f"window_{self._window_idx:04d}: 处理后数据为空，跳过")
                 return None
 
+            # IMU 门控 + NLMS 去运动伪迹
+            imu_df = self._slice_imu(timestamps[0], timestamps[-1])
+            df_proc = self._imu_remover.clean(df_proc, imu_df)
+            if df_proc is None:
+                log.debug(f"window_{self._window_idx:04d}: IMU 门控丢弃（运动幅度过大）")
+                return None
+
             processed_samples = df_proc[_PROCESSED_CH].values.tolist()
             aligned_ts = df_proc["time"].tolist()
 
@@ -211,6 +245,22 @@ class RealTimeEEGProcessor:
         arr = np.array(samples)
         df = pd.DataFrame(arr, columns=_PIPELINE_INPUT_CH)
         df.insert(0, "timestamps", timestamps)
+        return df
+
+    def _slice_imu(self, t_start: float, t_end: float) -> Optional[pd.DataFrame]:
+        """取出 [t_start, t_end] 时间段内的 IMU 数据，不足时返回 None"""
+        if not self._imu_buf_timestamps:
+            return None
+        ts = np.array(self._imu_buf_timestamps)
+        mask = (ts >= t_start) & (ts <= t_end)
+        if not mask.any():
+            return None
+        cols = self._imu_channels or ["AccX", "AccY", "AccZ", "GyrX", "GyrY", "GyrZ"]
+        arr = np.array(self._imu_buf_samples)[mask]
+        if arr.shape[1] < len(cols):
+            return None
+        df = pd.DataFrame(arr[:, :len(cols)], columns=cols)
+        df.insert(0, "time", ts[mask])
         return df
 
 
