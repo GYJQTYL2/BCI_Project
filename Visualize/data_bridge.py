@@ -17,6 +17,7 @@ import pandas as pd
 RAW_CHANNELS = ["ch_1", "ch_2", "ch_3", "ch_4"]
 PROC_CHANNELS = ["CH1", "CH2", "CH3", "CH4"]
 BANDS = ["delta", "theta", "alpha", "beta", "gamma"]
+IMU_CHANNELS = ["AccX", "AccY", "AccZ", "GyrX", "GyrY", "GyrZ"]
 
 
 class DataBridge:
@@ -74,6 +75,12 @@ class DataBridge:
         # ASR 基线状态
         self._baseline_status: str = "idle"   # idle | recording | ready
 
+        # IMU 缓冲
+        max_imu = max(1, int(window_seconds * 52))  # 52 Hz
+        self._imu_ts: deque = deque(maxlen=max_imu)
+        self._imu_ch: Dict[str, deque] = {ch: deque(maxlen=max_imu) for ch in IMU_CHANNELS}
+        self._imu_motion_level: str = "still"  # still | nlms | gated
+
     # ── 写入接口（采集线程调用）─────────────────────────────────────────────
 
     def add_raw(self, timestamps: List[float], samples: List[List[float]]) -> None:
@@ -127,6 +134,16 @@ class DataBridge:
             self._cl_ci.append(float(result.get("cognitive_load_index", 0.0)))
             self._cl_level.append(str(result.get("level", "low")))
 
+    def add_imu(self, timestamps: List[float], samples: List[List[float]],
+                motion_level: str = "still") -> None:
+        """写入一批 IMU 样本（AccX/AccY/AccZ/GyrX/GyrY/GyrZ）"""
+        with self._lock:
+            for ts, row in zip(timestamps, samples):
+                self._imu_ts.append(ts)
+                for i, ch in enumerate(IMU_CHANNELS):
+                    self._imu_ch[ch].append(row[i] if i < len(row) else 0.0)
+            self._imu_motion_level = motion_level
+
     def set_baseline_status(self, status: str) -> None:
         """更新 ASR 基线状态：idle | recording | ready"""
         with self._lock:
@@ -167,6 +184,11 @@ class DataBridge:
                     "cog_load_score": list(self._cl_score),
                     "cognitive_load_index": list(self._cl_ci),
                     "level": list(self._cl_level),
+                },
+                "imu": {
+                    "timestamps": _fmt_ts(list(self._imu_ts)),
+                    **{ch: list(self._imu_ch[ch]) for ch in IMU_CHANNELS},
+                    "motion_level": self._imu_motion_level,
                 },
             }
 

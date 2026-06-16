@@ -123,3 +123,12 @@ class RealTimeVisualizer:
     def add_cognitive_load(self, result: dict) -> None:
         """写入认知负荷检测结果（来自 RealTimeCognitiveLoadDetector.add()）"""
         self._bridge.add_cognitive_load(result)
+
+    def add_imu(
+        self,
+        samples: List[List[float]],
+        timestamps: List[float],
+        motion_level: str = "still",
+    ) -> None:
+        """写入一批 IMU 样本（AccX/AccY/AccZ/GyrX/GyrY/GyrZ）"""
+        self._bridge.add_imu(timestamps, samples, motion_level)

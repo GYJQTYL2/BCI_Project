@@ -158,8 +158,12 @@ def main():
                     for _ in range(channel_count):
                         ch_names.append(ch.child_value('label'))
                         ch = ch.next_sibling()
-                    if not ch_names:
-                        ch_names = [f'channel_{i + 1}' for i in range(channel_count)]
+                    if not ch_names or all(n == '' for n in ch_names):
+                        # IMU 流默认通道名
+                        if s_type == "IMU" and channel_count == 6:
+                            ch_names = ["AccX", "AccY", "AccZ", "GyrX", "GyrY", "GyrZ"]
+                        else:
+                            ch_names = [f'channel_{i + 1}' for i in range(channel_count)]
                     logging.info(f"  使用流定义的通道名称: {ch_names}")
 
                 stream_details[s_type] = {
@@ -219,6 +223,7 @@ def main():
                 "features":       FEATURE_OUTPUT,
                 "attention":      ATTENTION_OUTPUT,
                 "cognitive_load": CL_OUTPUT,
+                "imu":            args.output_dir,
             }))
         except ImportError:
             logging.warning("history_reader / history_api 未找到，历史数据功能不可用")
@@ -294,13 +299,20 @@ def main():
                     if samples:
                         corrected_timestamps = correctors[s_type].correct(lsl_timestamps)
                         savers[s_type].add(samples, corrected_timestamps.tolist())
-                        if visualizer:
+                        if visualizer and s_type != "IMU":
                             visualizer.add_raw(s_type, samples, corrected_timestamps.tolist())
                         # IMU → 路由到 EEG processor 用于运动伪迹去除
                         if s_type == "IMU" and eeg_processor is not None:
                             eeg_processor.add_imu(
                                 samples, corrected_timestamps.tolist(),
                                 ch_names=stream_details[s_type].get("channel_names"),
+                            )
+                        # IMU → 路由到可视化面板
+                        if s_type == "IMU" and visualizer is not None:
+                            motion_level = eeg_processor._imu_remover.last_motion_level \
+                                if eeg_processor is not None else "still"
+                            visualizer.add_imu(
+                                samples, corrected_timestamps.tolist(), motion_level
                             )
                         if s_type in processors:
                             for df_proc in processors[s_type].add(samples, lsl_timestamps):

@@ -185,6 +185,7 @@
   <div class="type-tab"        data-type="features"      onclick="switchType('features')">特征分析</div>
   <div class="type-tab"        data-type="attention"     onclick="switchType('attention')">注意力分析</div>
   <div class="type-tab"        data-type="cognitive_load" onclick="switchType('cognitive_load')">认知负荷</div>
+  <div class="type-tab"        data-type="imu"           onclick="switchType('imu')">IMU 运动</div>
   <div class="type-tab"        data-type="report"        onclick="switchType('report')">学习报告</div>
 </div>
 
@@ -219,6 +220,12 @@
   <div id="panel-cognitive_load" class="panel">
     <div class="chart-block"><div id="chart-cl-score"   style="height:300px;"></div></div>
     <div class="chart-block"><div id="chart-cl-indices" style="height:260px;"></div></div>
+  </div>
+
+  <!-- IMU 运动 -->
+  <div id="panel-imu" class="panel">
+    <div class="chart-block"><div id="chart-imu-acc" style="height:300px;"></div></div>
+    <div class="chart-block"><div id="chart-imu-gyr" style="height:300px;"></div></div>
   </div>
 
   <!-- 学习报告 -->
@@ -388,6 +395,22 @@ function ensureCharts(type) {
       ],
       makeLayout("认知负荷原始指数趋势", "时间 (HH:MM:SS.mmm)", "指数值"), CFG);
   }
+  else if (type === "imu") {
+    const ACC_COLORS = ["#4fc3f7", "#81c784", "#ffb74d"];
+    const GYR_COLORS = ["#e57373", "#ce93d8", "#80cbc4"];
+    Plotly.newPlot("chart-imu-acc",
+      ["AccX","AccY","AccZ"].map((ch, i) => ({
+        x:[], y:[], mode:"lines", name:ch,
+        line:{ color:ACC_COLORS[i], width:1.5 }, type:"scatter",
+      })),
+      makeLayout("加速度计 (AccX / AccY / AccZ)", "时间 (HH:MM:SS.mmm)", "加速度 (m/s²)"), CFG);
+    Plotly.newPlot("chart-imu-gyr",
+      ["GyrX","GyrY","GyrZ"].map((ch, i) => ({
+        x:[], y:[], mode:"lines", name:ch,
+        line:{ color:GYR_COLORS[i], width:1.5 }, type:"scatter",
+      })),
+      makeLayout("陀螺仪 (GyrX / GyrY / GyrZ)", "时间 (HH:MM:SS.mmm)", "角速度 (°/s)"), CFG);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -470,6 +493,27 @@ function renderCognitiveLoad(data) {
   ]);
 }
 
+function renderImu(data) {
+  if (!data?.timestamps?.length) return;
+  const ts = data.timestamps;
+
+  Plotly.react("chart-imu-acc",
+    ["AccX","AccY","AccZ"].map((ch, i) => ({
+      x: ts, y: data[ch] || [],
+      mode:"lines", name:ch,
+      line:{ color:["#4fc3f7","#81c784","#ffb74d"][i], width:1.5 }, type:"scatter",
+    }))
+  );
+
+  Plotly.react("chart-imu-gyr",
+    ["GyrX","GyrY","GyrZ"].map((ch, i) => ({
+      x: ts, y: data[ch] || [],
+      mode:"lines", name:ch,
+      line:{ color:["#e57373","#ce93d8","#80cbc4"][i], width:1.5 }, type:"scatter",
+    }))
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Session 管理
 // ═══════════════════════════════════════════════════════════════════
@@ -509,7 +553,7 @@ function onSessionChange() {
   });
 
   // 切到第一个可用类型
-  const firstAvail = ["raw","processed","features","attention","cognitive_load"]
+  const firstAvail = ["raw","processed","features","attention","cognitive_load","imu"]
     .find(t => session.types?.includes(t));
   if (firstAvail) switchType(firstAvail);
 }
@@ -574,6 +618,7 @@ async function loadData() {
     else if (type === "features")      renderFeatures(data);
     else if (type === "attention")     renderAttention(data);
     else if (type === "cognitive_load") renderCognitiveLoad(data);
+    else if (type === "imu")           renderImu(data);
 
     setStatus(`已加载 ${pts} 个数据点`);
   } catch(e) {

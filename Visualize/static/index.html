@@ -84,6 +84,7 @@
   <div class="tab" onclick="switchTab('processed')">预处理 EEG</div>
   <div class="tab" onclick="switchTab('features')">特征分析</div>
   <div class="tab" onclick="switchTab('attention')">注意力分析</div>
+  <div class="tab" onclick="switchTab('imu')">IMU 运动</div>
 </div>
 
 <div id="panel-raw" class="panel active">
@@ -140,6 +141,29 @@
   </div>
   <div class="chart-wrap">
     <div id="chart-cl-score" style="height:240px;width:100%;"></div>
+  </div>
+</div>
+
+<div id="panel-imu" class="panel">
+  <div id="imu-cards" style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;">
+    <div class="attn-card">
+      <div class="card-label">运动状态</div>
+      <div class="card-value" id="val-motion-level">--</div>
+    </div>
+    <div class="attn-card">
+      <div class="card-label">合加速度 (m/s²)</div>
+      <div class="card-value" id="val-acc-norm">--</div>
+    </div>
+    <div class="attn-card">
+      <div class="card-label">合角速度 (°/s)</div>
+      <div class="card-value" id="val-gyr-norm">--</div>
+    </div>
+  </div>
+  <div class="chart-wrap">
+    <div id="chart-imu-acc" style="height:280px;width:100%;"></div>
+  </div>
+  <div class="chart-wrap">
+    <div id="chart-imu-gyr" style="height:280px;width:100%;"></div>
   </div>
 </div>
 
@@ -205,7 +229,7 @@ function reactChart(id, traces) {
 }
 
 // ── Tab 切换 ─────────────────────────────────────────
-const TAB_NAMES = ["raw","processed","features","attention"];
+const TAB_NAMES = ["raw","processed","features","attention","imu"];
 
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t, i) =>
@@ -221,6 +245,13 @@ function switchTab(name) {
         if (el) Plotly.Plots.resize(el);
       });
       if (_snap?.attention) updateAttentionPanel(_snap.attention, _snap.features);
+    } else if (name === "imu") {
+      ensureImuCharts();
+      ["chart-imu-acc","chart-imu-gyr"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) Plotly.Plots.resize(el);
+      });
+      if (_snap?.imu) updateImuPanel(_snap.imu);
     } else if (name !== "features") {
       const chartId = name === "raw" ? "chart-raw" : "chart-processed";
       const el = document.getElementById(chartId);
@@ -288,6 +319,62 @@ function ensureFeatCharts() {
         legend:{ orientation:"h", x:0.5, xanchor:"center", y:-0.22,
                  font:{ size:12, color:"#c0c8dc" }, bgcolor:"rgba(0,0,0,0)" } }
     )
+  );
+}
+
+// ── IMU 面板 ──────────────────────────────────────────
+const IMU_ACC = ["AccX","AccY","AccZ"];
+const IMU_GYR = ["GyrX","GyrY","GyrZ"];
+const IMU_ACC_COLORS = ["#ef5350","#42a5f5","#66bb6a"];
+const IMU_GYR_COLORS = ["#ff7043","#26c6da","#ab47bc"];
+const MOTION_LABEL = { still:"静止", nlms:"轻微运动（修正中）", gated:"大幅运动（已门控）" };
+const MOTION_CLASS = { still:"level-high", nlms:"level-medium", gated:"level-low" };
+
+let _imuReady = false;
+function ensureImuCharts() {
+  if (_imuReady) return;
+  _imuReady = true;
+  initChart("chart-imu-acc",
+    IMU_ACC.map((ch, i) => ({ x:[], y:[], mode:"lines", name:ch,
+      line:{ color:IMU_ACC_COLORS[i], width:1.5 }, type:"scatter" })),
+    makeLayout("加速度计  ·  AccX / AccY / AccZ", "时间 (HH:MM:SS.mmm)", "加速度 (m/s²)")
+  );
+  initChart("chart-imu-gyr",
+    IMU_GYR.map((ch, i) => ({ x:[], y:[], mode:"lines", name:ch,
+      line:{ color:IMU_GYR_COLORS[i], width:1.5 }, type:"scatter" })),
+    makeLayout("陀螺仪  ·  GyrX / GyrY / GyrZ", "时间 (HH:MM:SS.mmm)", "角速度 (°/s)")
+  );
+}
+
+function updateImuPanel(imu) {
+  if (!imu?.timestamps?.length) return;
+
+  // 统计卡片
+  const last = ch => imu[ch]?.slice(-1)[0] ?? 0;
+  const accNorm = Math.sqrt(["AccX","AccY","AccZ"].reduce((s,ch) => s + last(ch)**2, 0));
+  const gyrNorm = Math.sqrt(["GyrX","GyrY","GyrZ"].reduce((s,ch) => s + last(ch)**2, 0));
+  document.getElementById("val-acc-norm").textContent = accNorm.toFixed(2);
+  document.getElementById("val-gyr-norm").textContent = gyrNorm.toFixed(2);
+
+  const level = imu.motion_level ?? "still";
+  const el = document.getElementById("val-motion-level");
+  el.textContent = MOTION_LABEL[level] ?? level;
+  el.className = "card-value " + (MOTION_CLASS[level] ?? "");
+
+  if (!_imuReady) return;
+  reactChart("chart-imu-acc",
+    IMU_ACC.map((ch, i) => ({
+      x: imu.timestamps, y: imu[ch] ?? [],
+      mode:"lines", name:ch,
+      line:{ color:IMU_ACC_COLORS[i], width:1.5 }, type:"scatter",
+    }))
+  );
+  reactChart("chart-imu-gyr",
+    IMU_GYR.map((ch, i) => ({
+      x: imu.timestamps, y: imu[ch] ?? [],
+      mode:"lines", name:ch,
+      line:{ color:IMU_GYR_COLORS[i], width:1.5 }, type:"scatter",
+    }))
   );
 }
 
@@ -555,6 +642,7 @@ function connect() {
     if (d.attention)      updateAttentionPanel(d.attention, d.features);
     if (d.cognitive_load) updateCognitiveLoadPanel(d.cognitive_load);
     if (d.baseline_status != null) updateBaselineUI(d.baseline_status);
+    if (d.imu)            updateImuPanel(d.imu);
   };
 }
 connect();

@@ -32,6 +32,7 @@ _FILE_PREFIX: Dict[str, str] = {
     "features":       "features",
     "attention":      "attention",
     "cognitive_load": "cognitive_load",
+    "imu":            "IMU",
 }
 
 # 特征面板只展示频段功率，通道与频段名称
@@ -104,7 +105,8 @@ class HistoryReader:
                 t0, t1 = _session_time_range(sub, _FILE_PREFIX[dtype])
                 # 只在目录内确实有 segment 文件时才将该类型纳入 types
                 if t0 is not None:
-                    sessions[canonical]["types"].append(dtype)
+                    if dtype not in sessions[canonical]["types"]:
+                        sessions[canonical]["types"].append(dtype)
                     if sessions[canonical]["start_ts"] is None or t0 < sessions[canonical]["start_ts"]:
                         sessions[canonical]["start_ts"] = t0
                 if t1 is not None:
@@ -139,12 +141,12 @@ class HistoryReader:
             log.warning(f"[HistoryReader] 未配置数据类型: {data_type}")
             return {}
 
-        session_dir = _find_session_dir(self._dirs[data_type], session_id)
-        if session_dir is None:
+        session_dirs = _find_session_dirs(self._dirs[data_type], session_id)
+        if not session_dirs:
             log.warning(f"[HistoryReader] 未找到 session: {data_type}/{session_id} (±{_SESSION_MERGE_THRESHOLD}s)")
             return {}
 
-        df = _load_segments(session_dir, _FILE_PREFIX[data_type])
+        df = _load_segments_multi(session_dirs, _FILE_PREFIX[data_type])
         if df is None or df.empty:
             return {}
 
@@ -177,6 +179,8 @@ class HistoryReader:
             return _to_attention_dict(df, ts_fmt)
         elif data_type == "cognitive_load":
             return _to_cognitive_load_dict(df, ts_fmt)
+        elif data_type == "imu":
+            return _to_imu_dict(df, ts_fmt)
         return {}
 
 
@@ -202,27 +206,23 @@ def _find_canonical_session(sessions: dict, sid: str) -> Optional[str]:
     return None
 
 
-def _find_session_dir(base: Path, session_id: str) -> Optional[Path]:
+def _find_session_dirs(base: Path, session_id: str) -> List[Path]:
     """
-    在 base 下查找 session_id 对应的目录，允许时间戳偏差 < 阈值秒。
+    在 base 下查找与 session_id 时间差 < 阈值的所有目录（支持跨目录 session 合并）。
+    返回按目录名排序的列表；未找到时返回空列表。
     """
-    exact = base / session_id
-    if exact.exists():
-        return exact
     if not base.exists():
-        return None
+        return []
     target = _sid_to_ts(session_id)
     if target == 0.0:
-        return None
-    best: Optional[Path] = None
-    best_diff = _SESSION_MERGE_THRESHOLD
+        return []
+    matches: List[Path] = []
     for sub in base.iterdir():
         if not sub.is_dir() or not _SESSION_RE.match(sub.name):
             continue
-        diff = abs(_sid_to_ts(sub.name) - target)
-        if diff < best_diff:
-            best_diff, best = diff, sub
-    return best
+        if abs(_sid_to_ts(sub.name) - target) < _SESSION_MERGE_THRESHOLD:
+            matches.append(sub)
+    return sorted(matches)
 
 
 def _session_display(sid: str) -> str:
@@ -272,6 +272,23 @@ def _load_segments(session_dir: Path, prefix: str) -> Optional[pd.DataFrame]:
         return df
     except Exception:
         log.exception(f"[HistoryReader] 读取失败: {session_dir}")
+        return None
+
+
+def _load_segments_multi(session_dirs: List[Path], prefix: str) -> Optional[pd.DataFrame]:
+    """从多个 session 目录加载所有 segment CSV 并按时间戳合并（用于跨目录 session 合并）"""
+    all_segs = []
+    for d in session_dirs:
+        all_segs.extend(sorted(d.glob(f"{prefix}_seg*.csv")))
+    if not all_segs:
+        log.warning(f"[HistoryReader] 未找到 {prefix}_seg*.csv in {session_dirs}")
+        return None
+    try:
+        df = pd.concat([pd.read_csv(f) for f in all_segs], ignore_index=True)
+        df.sort_values("timestamp", inplace=True, ignore_index=True)
+        return df
+    except Exception:
+        log.exception(f"[HistoryReader] 读取失败: {session_dirs}")
         return None
 
 
@@ -348,4 +365,13 @@ def _to_cognitive_load_dict(df: pd.DataFrame, ts_fmt: list) -> dict:
             result[col] = df[col].tolist()
     if "level" in df.columns:
         result["level"] = [_INT_TO_LEVEL.get(int(round(float(v))), "low") for v in df["level"]]
+    return result
+
+
+def _to_imu_dict(df: pd.DataFrame, ts_fmt: list) -> dict:
+    """IMU → {"timestamps": [...], "AccX": [...], ..., "GyrZ": [...]}"""
+    result: dict = {"timestamps": ts_fmt}
+    for col in ("AccX", "AccY", "AccZ", "GyrX", "GyrY", "GyrZ"):
+        if col in df.columns:
+            result[col] = df[col].tolist()
     return result

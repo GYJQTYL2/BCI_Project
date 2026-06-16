@@ -5,11 +5,11 @@ ASR (Artifact Subspace Reconstruction) 封装
     1. 录制基线（安静闭眼 30 秒）
        cleaner = ASRCleaner()
        cleaner.record_baseline(df)   # 喂入基线 DataFrame
-       cleaner.save_baseline("baseline.npy")
+       cleaner.save_baseline("baseline.pkl")
 
     2. 下次直接加载
        cleaner = ASRCleaner()
-       cleaner.load_baseline("baseline.npy")
+       cleaner.load_baseline("baseline.pkl")
 
     3. 实时清理
        df_clean = cleaner.clean(df)
@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 _CHANNELS = ["CH1", "CH2", "CH3", "CH4"]
-_DEFAULT_BASELINE = Path(__file__).parent / "asr_baseline.npy"
+_DEFAULT_BASELINE = Path(__file__).parent / "asr_baseline.pkl"
 
 
 class ASRCleaner:
@@ -77,8 +77,12 @@ class ASRCleaner:
         if n_samples < int(self._sfreq * 30):
             print(f"[ASR] 警告：基线长度 {n_samples/self._sfreq:.1f}s，建议 >= 30s")
 
+        import mne
+        info = mne.create_info(ch_names=_CHANNELS, sfreq=self._sfreq, ch_types="eeg")
+        raw = mne.io.RawArray(baseline, info, verbose=False)
+
         self._asr = ASR(sfreq=self._sfreq, cutoff=self._cutoff)
-        self._asr.fit(baseline)
+        self._asr.fit(raw)
         self._baseline_buf = []
         print(f"[ASR] 训练完成，基线 {n_samples/self._sfreq:.1f}s ({n_samples} 样本)")
         return n_samples
@@ -87,15 +91,11 @@ class ASRCleaner:
         """保存训练好的 ASR 状态到文件"""
         if self._asr is None:
             raise RuntimeError("ASR 尚未训练")
+        import pickle
         save_path = Path(path) if path else self._baseline_path
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        # asrpy 的 ASR 对象内部状态存在 M_ 和 T_ 属性
-        np.save(str(save_path), {
-            "M": self._asr.M_,
-            "T": self._asr.T_,
-            "sfreq": self._sfreq,
-            "cutoff": self._cutoff,
-        }, allow_pickle=True)
+        with open(save_path, "wb") as f:
+            pickle.dump(self._asr, f)
         print(f"[ASR] 基线已保存 → {save_path}")
         return save_path
 
@@ -104,15 +104,12 @@ class ASRCleaner:
         从文件加载 ASR 状态。
         返回 True = 加载成功，False = 文件不存在。
         """
+        import pickle
         load_path = Path(path) if path else self._baseline_path
         if not load_path.exists():
             return False
-
-        from asrpy import ASR
-        state = np.load(str(load_path), allow_pickle=True).item()
-        self._asr = ASR(sfreq=state["sfreq"], cutoff=state["cutoff"])
-        self._asr.M_ = state["M"]
-        self._asr.T_ = state["T"]
+        with open(load_path, "rb") as f:
+            self._asr = pickle.load(f)
         print(f"[ASR] 基线已加载 ← {load_path}")
         return True
 
@@ -136,7 +133,11 @@ class ASRCleaner:
 
         data = df[_CHANNELS].values.T  # (4, n_samples)
         try:
-            clean = self._asr.transform(data)  # (4, n_samples)
+            import mne
+            info = mne.create_info(ch_names=_CHANNELS, sfreq=self._sfreq, ch_types="eeg")
+            raw = mne.io.RawArray(data, info, verbose=False)
+            clean_raw = self._asr.transform(raw)
+            clean = clean_raw.get_data()  # (4, n_samples)
         except Exception as e:
             print(f"[ASR] transform 失败，跳过本窗口: {e}")
             return df

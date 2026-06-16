@@ -161,9 +161,25 @@ def _to_float(v: Optional[str]) -> Optional[float]:
         return None
 
 
+def _sanitize(obj):
+    """递归将 NaN / Inf 替换为 None，避免 JSON 序列化失败"""
+    import math
+    if isinstance(obj, float):
+        return None if not math.isfinite(obj) else obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+
 def _json_response(data) -> web.Response:
+    try:
+        text = json.dumps(data, ensure_ascii=False, allow_nan=False)
+    except (ValueError, TypeError):
+        text = json.dumps(_sanitize(data), ensure_ascii=False, allow_nan=False)
     return web.Response(
-        text=json.dumps(data, ensure_ascii=False, allow_nan=False),
+        text=text,
         content_type="application/json",
         headers={"Access-Control-Allow-Origin": "*"},
     )
