@@ -27,9 +27,8 @@ import pandas as pd
 _EEG_CHANNELS = ["CH1", "CH2", "CH3", "CH4"]
 _IMU_CHANNELS = ["AccX", "AccY", "AccZ", "GyrX", "GyrY", "GyrZ"]
 
-# 静止时合加速度 ≈ 9.8 m/s²（1g），偏差单位与设备输出一致
-# Muse 加速度计输出单位为 m/s²，若为 g 则阈值分别调为 0.5 和 0.15
-_GRAVITY = 9.8
+# 静止时合加速度 ≈ 1.0g，Muse 加速度计输出单位为 g
+_GRAVITY = 1.0
 
 
 class NLMSFilter:
@@ -81,16 +80,16 @@ class IMUArtifactRemover:
     参数:
         n_taps          : NLMS 滤波器抽头数，默认 8
         mu              : NLMS 步长，默认 0.5
-        gate_threshold  : 合加速度偏差阈值（m/s²），超过则门控丢弃窗口，默认 4.9（≈0.5g）
-        nlms_threshold  : 低于此值视为静止，直通不修正，默认 1.47（≈0.15g）
+        gate_threshold  : 合加速度偏差阈值（g），超过则门控丢弃窗口，默认 0.5g
+        nlms_threshold  : 低于此值视为静止，直通不修正，默认 0.15g
     """
 
     def __init__(
         self,
         n_taps: int = 8,
         mu: float = 0.5,
-        gate_threshold: float = 4.9,
-        nlms_threshold: float = 1.47,
+        gate_threshold: float = 0.5,
+        nlms_threshold: float = 0.15,
     ):
         self.gate_threshold = gate_threshold
         self.nlms_threshold = nlms_threshold
