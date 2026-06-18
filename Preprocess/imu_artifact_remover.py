@@ -31,6 +31,11 @@ _IMU_CHANNELS = ["AccX", "AccY", "AccZ", "GyrX", "GyrY", "GyrZ"]
 _GRAVITY = 1.0
 
 
+# 陀螺仪阈值（°/s）
+_GYR_GATE_THRESHOLD = 30.0   # 超过则门控
+_GYR_NLMS_THRESHOLD = 15.0   # 超过则 NLMS 修正
+
+
 class NLMSFilter:
     """
     单通道 NLMS 自适应滤波器。
@@ -82,6 +87,7 @@ class IMUArtifactRemover:
         mu              : NLMS 步长，默认 0.5
         gate_threshold  : 合加速度偏差阈值（g），超过则门控丢弃窗口，默认 0.5g
         nlms_threshold  : 低于此值视为静止，直通不修正，默认 0.15g
+        陀螺仪阈值由模块常量控制：gated >30°/s，nlms >15°/s
     """
 
     def __init__(
@@ -94,7 +100,8 @@ class IMUArtifactRemover:
         self.gate_threshold = gate_threshold
         self.nlms_threshold = nlms_threshold
         self._filters = {ch: NLMSFilter(n_taps=n_taps, mu=mu) for ch in _EEG_CHANNELS}
-        self._last_motion_level: str = "still"   # still | nlms | gated
+        self._last_motion_level: str = "still"
+        self._consecutive_gated: int = 0  # 连续门控窗口计数
 
     @property
     def last_motion_level(self) -> str:
@@ -128,10 +135,14 @@ class IMUArtifactRemover:
         self._last_motion_level = motion_level
 
         if motion_level == "gated":
-            # 大运动：重置所有滤波器权重，丢弃本窗口
-            for f in self._filters.values():
-                f.reset()
+            self._consecutive_gated += 1
+            # 连续3个窗口大幅运动才清零权重，避免短暂运动后立即丢失收敛状态
+            if self._consecutive_gated >= 3:
+                for f in self._filters.values():
+                    f.reset()
             return None
+
+        self._consecutive_gated = 0  # 非 gated 窗口重置计数
 
         if motion_level == "still":
             return eeg_df
@@ -152,23 +163,40 @@ class IMUArtifactRemover:
         return df_out
 
     def _assess_motion(self, imu_df: pd.DataFrame) -> str:
-        """根据合加速度偏差判断运动级别"""
+        """根据合加速度偏差、加速度方差、陀螺仪幅度联合判断运动级别"""
         acc = imu_df[["AccX", "AccY", "AccZ"]].values
-        norm = np.sqrt((acc ** 2).sum(axis=1))
-        deviation = np.abs(norm - _GRAVITY).max()
+        acc_norm = np.sqrt((acc ** 2).sum(axis=1))
+        # p95 而非 max，避免单点噪声误触发门控
+        acc_dev = np.percentile(np.abs(acc_norm - _GRAVITY), 95)
+        acc_std = acc_norm.std()  # 振动/震颤检测（倾斜不变，振动会升高方差）
 
-        if deviation > self.gate_threshold:
+        gyr = imu_df[["GyrX", "GyrY", "GyrZ"]].values
+        # p95 而非 max，避免陀螺仪单点噪声误触发门控
+        gyr_norm = np.percentile(np.sqrt((gyr ** 2).sum(axis=1)), 95)
+
+        if acc_dev > self.gate_threshold or gyr_norm > _GYR_GATE_THRESHOLD:
             return "gated"
-        if deviation > self.nlms_threshold:
+        if acc_dev > self.nlms_threshold or acc_std > 0.05 or gyr_norm > _GYR_NLMS_THRESHOLD:
             return "nlms"
         return "still"
 
     def _interpolate_imu(
         self, eeg_times: np.ndarray, imu_df: pd.DataFrame
     ) -> np.ndarray:
-        """将 52 Hz IMU 线性插值到 EEG 时间轴，返回 (n_samples, 6)"""
+        """将 52 Hz IMU 三次样条插值到 EEG 时间轴，返回 (n_samples, 6)"""
+        from scipy.interpolate import CubicSpline
         result = np.zeros((len(eeg_times), 6))
         imu_times = imu_df["time"].values
         for i, col in enumerate(_IMU_CHANNELS):
-            result[:, i] = np.interp(eeg_times, imu_times, imu_df[col].values)
+            if len(imu_times) >= 3:
+                imu_vals = imu_df[col].values
+                cs = CubicSpline(imu_times, imu_vals, extrapolate=False)
+                vals = cs(eeg_times)
+                # 边界外的点（NaN）用端点值填充，避免样条外推振荡
+                vals = np.where(eeg_times < imu_times[0], imu_vals[0], vals)
+                vals = np.where(eeg_times > imu_times[-1], imu_vals[-1], vals)
+                result[:, i] = vals
+            else:
+                # IMU 样本太少（<3），回退到线性插值
+                result[:, i] = np.interp(eeg_times, imu_times, imu_df[col].values)
         return result

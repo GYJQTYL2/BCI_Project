@@ -200,6 +200,9 @@ def _fmt_ts(timestamps: list) -> list:
     import datetime
     result = []
     for ts in timestamps:
-        dt = datetime.datetime.fromtimestamp(ts)
-        result.append(dt.strftime("%H:%M:%S.") + f"{dt.microsecond // 1000:03d}")
+        try:
+            dt = datetime.datetime.fromtimestamp(float(ts))
+            result.append(dt.strftime("%H:%M:%S.") + f"{dt.microsecond // 1000:03d}")
+        except (OSError, ValueError, OverflowError):
+            result.append("--:--.---")
     return result

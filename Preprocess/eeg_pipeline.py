@@ -131,6 +131,19 @@ class EEGPreprocessPipeline:
         #df = self._step5_scale(df)
         return df
 
+    def process_for_baseline(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        运行 Step1-3（清洗→基线校正→滤波），不含 ASR。
+        供 ASR 基线录制使用，确保训练数据与 transform 时的信号频谱一致。
+        """
+        df = self._step1_clean(df)
+        if df.empty:
+            return df
+        df = self._step2_baseline(df)
+        df, _ = interpolate_outliers(df, 800.0)
+        df = self._step3_filter(df)
+        return df
+
     # ── 核心运行逻辑 ───────────────────────────
     def _run_pipeline(self, df: pd.DataFrame, stem: str, out_dir: Path) -> pd.DataFrame:
         """内部：对已加载的 DataFrame 执行完整5步处理并保存结果"""

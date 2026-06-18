@@ -182,14 +182,12 @@ class RealTimeEEGProcessor:
         self._buf_samples.extend(samples)
         self._buf_timestamps.extend(corrected.tolist())
 
-        # 基线录制模式：同时喂入 ASR 训练缓冲
+        # 基线录制模式：同时喂入 ASR 训练缓冲（走 Step1-3 使频谱与 transform 一致）
         if self._recording_baseline:
             df_raw = self._build_df(samples, corrected.tolist())
-            # build_df 用原始列名，需要 clean 后才有 CH1–CH4
-            from data_clean import clean_eeg_frame
-            df_clean = clean_eeg_frame(df_raw)
-            if not df_clean.empty:
-                self._asr.feed_baseline(df_clean)
+            df_filtered = self.pipeline.process_for_baseline(df_raw)
+            if not df_filtered.empty:
+                self._asr.feed_baseline(df_filtered)
 
         processed: List[pd.DataFrame] = []
         while len(self._buf_samples) >= self.window_size:
@@ -252,7 +250,8 @@ class RealTimeEEGProcessor:
         if not self._imu_buf_timestamps:
             return None
         ts = np.array(self._imu_buf_timestamps)
-        mask = (ts >= t_start) & (ts <= t_end)
+        # 扩展 ±100ms，避免 EEG 窗口边界落在两个 IMU 采样点之间时误返回 None
+        mask = (ts >= t_start - 0.1) & (ts <= t_end + 0.1)
         if not mask.any():
             return None
         cols = self._imu_channels or ["AccX", "AccY", "AccZ", "GyrX", "GyrY", "GyrZ"]

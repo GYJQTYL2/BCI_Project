@@ -41,7 +41,7 @@ class ASRCleaner:
     def __init__(
         self,
         sfreq: float = 256.0,
-        cutoff: float = 20.0,
+        cutoff: float = 15.0,
         baseline_path: str | Path = _DEFAULT_BASELINE,
     ):
         from asrpy import ASR
