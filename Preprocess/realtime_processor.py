@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from eeg_pipeline import EEGPreprocessPipeline
 from asr_cleaner import ASRCleaner
 from imu_artifact_remover import IMUArtifactRemover
+from blink_artifact_remover import BlinkArtifactRemover
 
 _QA_DIR = Path(__file__).parent.parent / "QualityAssess"
 sys.path.insert(0, str(_QA_DIR))
@@ -118,6 +119,7 @@ class RealTimeEEGProcessor:
 
         # IMU 缓冲（来自 LSL IMU 流，用于运动伪迹去除）
         self._imu_remover = IMUArtifactRemover()
+        self._blink_remover = BlinkArtifactRemover()
         self._imu_buf_samples: List[List[float]] = []
         self._imu_buf_timestamps: List[float] = []
         self._imu_channels: List[str] = []
@@ -260,6 +262,12 @@ class RealTimeEEGProcessor:
             for ch, info in self._channel_quality.items():
                 if info["quality"] == "bad" and ch in df_proc.columns:
                     df_proc[ch] = np.nan
+
+            # 眨眼检测 + 线性插值修复（ASR 未激活时的 fallback）
+            df_proc = self._blink_remover.clean(df_proc, self.nominal_srate)
+            if df_proc is None:
+                log.debug(f"window_{self._window_idx:04d}: 眨眼门控丢弃（污染比例过高）")
+                return None
 
             # IMU 门控 + NLMS 去运动伪迹
             imu_df = self._slice_imu(timestamps[0], timestamps[-1])
