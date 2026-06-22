@@ -30,10 +30,19 @@ def extract(epoch: np.ndarray, ch_name: str, fs: float) -> dict:
         ch_name : 通道名，用于构造特征列名前缀
         fs      : 采样率（Hz）
     返回:
-        {特征名: 特征值} 的字典
+        {特征名: 特征值} 的字典，坏道（全 NaN）时所有值返回 NaN
     """
     feat = {}
     p = ch_name  # prefix
+
+    # 坏道：全 NaN，返回 NaN 特征让下游 _band_mean 跳过
+    if np.all(np.isnan(epoch)):
+        for band in BANDS:
+            feat[f"{p}_{band}_power"] = np.nan
+            feat[f"{p}_{band}_rel"]   = np.nan
+        feat[f"{p}_total_power"]      = np.nan
+        feat[f"{p}_spectral_entropy"] = np.nan
+        return feat
 
     # Welch 法估计功率谱密度
     # Use full epoch length for 1 Hz frequency resolution (256 samples → 1 Hz bins)

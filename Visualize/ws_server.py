@@ -23,6 +23,18 @@ _STATIC_DIR = Path(__file__).parent / "static"
 _INDEX_HTML = _STATIC_DIR / "index.html"
 
 
+def _sanitize(obj):
+    """递归将 NaN / Inf 替换为 None，避免 JSON 序列化失败"""
+    import math
+    if isinstance(obj, float):
+        return None if not math.isfinite(obj) else obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+
 class WebSocketServer:
     def __init__(
         self,
@@ -152,7 +164,10 @@ class WebSocketServer:
             await asyncio.sleep(self._interval)
             if not clients:
                 continue
-            data = json.dumps(self._bridge.snapshot())
+            try:
+                data = json.dumps(self._bridge.snapshot(), allow_nan=False)
+            except (ValueError, TypeError):
+                data = json.dumps(_sanitize(self._bridge.snapshot()), allow_nan=False)
             dead = set()
             for ws in list(clients):
                 try:

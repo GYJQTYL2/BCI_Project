@@ -32,6 +32,10 @@ from eeg_pipeline import EEGPreprocessPipeline
 from asr_cleaner import ASRCleaner
 from imu_artifact_remover import IMUArtifactRemover
 
+_QA_DIR = Path(__file__).parent.parent / "QualityAssess"
+sys.path.insert(0, str(_QA_DIR))
+from channel_quality import assess_window, interpolate_saturated
+
 _LSL_DIR = Path(__file__).parent.parent / "Xmuse-Connect" / "LSL"
 sys.path.insert(0, str(_LSL_DIR))
 from data_saver import DataSaver
@@ -107,6 +111,10 @@ class RealTimeEEGProcessor:
         self._buf_timestamps: List[float] = []
         self._window_idx = 0
         self._recording_baseline = False
+        self._baseline_fed_idx: int = 0  # 已喂入 ASR 基线缓冲的样本位置
+
+        # 通道质量状态（每窗口更新）
+        self._channel_quality: dict = {}   # {ch: assess() 结果}
 
         # IMU 缓冲（来自 LSL IMU 流，用于运动伪迹去除）
         self._imu_remover = IMUArtifactRemover()
@@ -145,6 +153,7 @@ class RealTimeEEGProcessor:
         """开始录制 ASR 基线，期间采集到的数据会同时喂入训练缓冲"""
         self._asr.start_recording()
         self._recording_baseline = True
+        self._baseline_fed_idx = len(self._buf_samples)  # 从当前位置开始，不重处理历史
         log.info("ASR 基线录制开始，请保持安静闭眼...")
 
     def stop_baseline(self, save_path: Optional[str] = None) -> bool:
@@ -182,12 +191,19 @@ class RealTimeEEGProcessor:
         self._buf_samples.extend(samples)
         self._buf_timestamps.extend(corrected.tolist())
 
-        # 基线录制模式：同时喂入 ASR 训练缓冲（走 Step1-3 使频谱与 transform 一致）
+        # 基线录制模式：以 window_size 为步进逐窗口喂入，保证 filtfilt 样本充足
         if self._recording_baseline:
-            df_raw = self._build_df(samples, corrected.tolist())
-            df_filtered = self.pipeline.process_for_baseline(df_raw)
-            if not df_filtered.empty:
-                self._asr.feed_baseline(df_filtered)
+            while self._baseline_fed_idx + self.window_size <= len(self._buf_samples):
+                start = self._baseline_fed_idx
+                end   = start + self.window_size
+                df_raw = self._build_df(
+                    self._buf_samples[start:end],
+                    self._buf_timestamps[start:end],
+                )
+                df_filtered = self.pipeline.process_for_baseline(df_raw)
+                if not df_filtered.empty:
+                    self._asr.feed_baseline(df_filtered)
+                self._baseline_fed_idx = end
 
         processed: List[pd.DataFrame] = []
         while len(self._buf_samples) >= self.window_size:
@@ -210,15 +226,40 @@ class RealTimeEEGProcessor:
         timestamps = self._buf_timestamps[:n]
         self._buf_samples = self._buf_samples[n:]
         self._buf_timestamps = self._buf_timestamps[n:]
+        # 基线索引跟随缓冲区头部移动，保持相对位置正确
+        self._baseline_fed_idx = max(0, self._baseline_fed_idx - n)
 
         self._window_idx += 1
 
         df = self._build_df(samples, timestamps)
         try:
+            # ── 质量评估（基线校正前，在原始 ADC 值上进行）──────────────
+            # _build_df 产生 eeg_1~4，rename 到 CH1~4 供 assess_window 使用
+            raw_for_qa = df.rename(columns={
+                "eeg_1": "CH1", "eeg_2": "CH2", "eeg_3": "CH3", "eeg_4": "CH4"
+            })
+            self._channel_quality = assess_window(raw_for_qa, _PROCESSED_CH, self.nominal_srate)
+
+            # poor 通道：对零散饱和点做线性插值（在原始列上修复）
+            ch_map = {"CH1": "eeg_1", "CH2": "eeg_2", "CH3": "eeg_3", "CH4": "eeg_4"}
+            for ch, info in self._channel_quality.items():
+                if info["quality"] == "poor":
+                    raw_col = ch_map[ch]
+                    df[raw_col] = interpolate_saturated(df[raw_col].values)
+                elif info["quality"] == "bad":
+                    log.debug(
+                        f"window_{self._window_idx:04d}: {ch} 质量差（{info['reason']}），标记为坏道"
+                    )
+
             df_proc = self.pipeline.process_df(df)
             if df_proc.empty:
                 log.warning(f"window_{self._window_idx:04d}: 处理后数据为空，跳过")
                 return None
+
+            # bad 通道预处理后标记为 NaN，防止污染下游特征
+            for ch, info in self._channel_quality.items():
+                if info["quality"] == "bad" and ch in df_proc.columns:
+                    df_proc[ch] = np.nan
 
             # IMU 门控 + NLMS 去运动伪迹
             imu_df = self._slice_imu(timestamps[0], timestamps[-1])

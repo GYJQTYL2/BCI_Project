@@ -17,6 +17,7 @@ ASR (Artifact Subspace Reconstruction) 封装
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -25,6 +26,13 @@ import pandas as pd
 
 _CHANNELS = ["CH1", "CH2", "CH3", "CH4"]
 _DEFAULT_BASELINE = Path(__file__).parent / "asr_baseline.pkl"
+
+_QA_DIR = Path(__file__).parent.parent / "QualityAssess"
+import sys as _sys
+_sys.path.insert(0, str(_QA_DIR))
+from baseline_quality import assess_asr_baseline
+
+log = logging.getLogger(__name__)
 
 
 class ASRCleaner:
@@ -72,10 +80,19 @@ class ASRCleaner:
 
         from asrpy import ASR
         baseline = np.concatenate(self._baseline_buf, axis=1)  # (4, total_samples)
-        n_samples = baseline.shape[1]
+        n_recorded = baseline.shape[1]  # 录制时长，用于用户报警
 
-        if n_samples < int(self._sfreq * 30):
-            print(f"[ASR] 警告：基线长度 {n_samples/self._sfreq:.1f}s，建议 >= 30s")
+        # 丢弃任一通道含 NaN 的采样点，防止 ASR fit 产生偏置协方差
+        valid = ~np.isnan(baseline).any(axis=0)
+        n_dropped = int((~valid).sum())
+        if n_dropped:
+            log.warning(f"[ASR] 基线含 {n_dropped} 个 NaN 采样点（{n_dropped/self._sfreq:.1f}s），已丢弃")
+            baseline = baseline[:, valid]
+
+        n_samples = baseline.shape[1]  # 净有效样本数，传给 assess_asr_baseline
+
+        if n_recorded < int(self._sfreq * 30):
+            print(f"[ASR] 警告：基线录制时长 {n_recorded/self._sfreq:.1f}s，建议 >= 30s")
 
         import mne
         info = mne.create_info(ch_names=_CHANNELS, sfreq=self._sfreq, ch_types="eeg")
@@ -85,6 +102,12 @@ class ASRCleaner:
         self._asr.fit(raw)
         self._baseline_buf = []
         print(f"[ASR] 训练完成，基线 {n_samples/self._sfreq:.1f}s ({n_samples} 样本)")
+
+        # 基线质量评估：不合格则丢弃 ASR，is_ready 返回 False，后续不会生效
+        result = assess_asr_baseline(self._asr, n_samples, self._sfreq)
+        if not result["ok"]:
+            self._asr = None
+
         return n_samples
 
     def save_baseline(self, path: str | Path | None = None) -> Path:
@@ -102,14 +125,22 @@ class ASRCleaner:
     def load_baseline(self, path: str | Path | None = None) -> bool:
         """
         从文件加载 ASR 状态。
-        返回 True = 加载成功，False = 文件不存在。
+        返回 True = 加载成功且质量合格，False = 文件不存在或质量不合格。
         """
         import pickle
         load_path = Path(path) if path else self._baseline_path
         if not load_path.exists():
             return False
         with open(load_path, "rb") as f:
-            self._asr = pickle.load(f)
+            asr = pickle.load(f)
+
+        # 加载后做结构质量检查（无法恢复时长，只检查通道功率均衡性和 T 极值）
+        result = assess_asr_baseline(asr, n_samples=None, sfreq=self._sfreq)
+        if not result["ok"]:
+            log.error(f"[ASR] 已加载的基线质量不合格，不启用 ASR：{load_path}")
+            return False
+
+        self._asr = asr
         print(f"[ASR] 基线已加载 ← {load_path}")
         return True
 

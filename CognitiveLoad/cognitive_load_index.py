@@ -24,8 +24,10 @@ _EPS = 1e-10
 
 
 def _band_mean(row: pd.Series, band: str, channels: list[str]) -> float:
-    vals = [row.get(f"{ch}_{band}_power", 0.0) for ch in channels]
-    return float(np.mean(vals))
+    """取指定频段在多通道上的均值功率，跳过 NaN（坏道）"""
+    vals = [row.get(f"{ch}_{band}_power", np.nan) for ch in channels]
+    valid = [v for v in vals if v is not None and not (isinstance(v, float) and np.isnan(v))]
+    return float(np.mean(valid)) if valid else 0.0
 
 
 class CognitiveLoadIndex:

@@ -51,6 +51,8 @@ class NLMSFilter:
 
     def __init__(self, n_taps: int = 8, mu: float = 0.5,
                  eps: float = 1e-6, n_ref: int = 6):
+        if not (0 < mu < 2):
+            raise ValueError(f"NLMS mu 必须在 (0, 2) 内，传入值: {mu}")
         self.n_taps = n_taps
         self.mu = mu
         self.eps = eps
@@ -187,16 +189,29 @@ class IMUArtifactRemover:
         from scipy.interpolate import CubicSpline
         result = np.zeros((len(eeg_times), 6))
         imu_times = imu_df["time"].values
+
+        # LSL 时间戳可能有重复或轻微乱序，CubicSpline 要求严格递增
+        order = np.argsort(imu_times, kind="stable")
+        imu_times = imu_times[order]
+        imu_data = imu_df[_IMU_CHANNELS].values[order]
+        # 去除重复时间戳（保留每组第一个）
+        unique_mask = np.concatenate(([True], np.diff(imu_times) > 0))
+        imu_times = imu_times[unique_mask]
+        imu_data = imu_data[unique_mask]
+
         for i, col in enumerate(_IMU_CHANNELS):
+            imu_vals = imu_data[:, i]
             if len(imu_times) >= 3:
-                imu_vals = imu_df[col].values
                 cs = CubicSpline(imu_times, imu_vals, extrapolate=False)
                 vals = cs(eeg_times)
-                # 边界外的点（NaN）用端点值填充，避免样条外推振荡
                 vals = np.where(eeg_times < imu_times[0], imu_vals[0], vals)
                 vals = np.where(eeg_times > imu_times[-1], imu_vals[-1], vals)
+                # imu_vals 含 NaN 时样条会扩散 NaN 到相邻区间，用线性插值填补
+                nan_mask = np.isnan(vals)
+                if nan_mask.any():
+                    vals[nan_mask] = np.interp(eeg_times[nan_mask], imu_times, imu_vals)
                 result[:, i] = vals
             else:
                 # IMU 样本太少（<3），回退到线性插值
-                result[:, i] = np.interp(eeg_times, imu_times, imu_df[col].values)
+                result[:, i] = np.interp(eeg_times, imu_times, imu_vals)
         return result
