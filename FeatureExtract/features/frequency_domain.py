@@ -20,6 +20,11 @@ BANDS: dict[str, tuple[float, float]] = {
     "gamma": (30.0, 45.0),
 }
 
+# beta 子频段，用于 EMG 污染检测
+_BETA_LOW  = (13.0, 20.0)
+_BETA_HIGH = (20.0, 30.0)
+_EPS = 1e-10
+
 
 def extract(epoch: np.ndarray, ch_name: str, fs: float) -> dict:
     """
@@ -57,6 +62,19 @@ def extract(epoch: np.ndarray, ch_name: str, fs: float) -> dict:
         mask = (freqs >= low) & (freqs <= high)
         band_powers[band] = float(np.trapz(psd[mask], freqs[mask])) if mask.any() else 0.0
         feat[f"{p}_{band}_power"] = band_powers[band]
+
+    # beta EMG 污染检测：用 beta_high/beta_low 比值连续降权
+    # 真实 beta 节律符合 1/f 形态，beta_low > beta_high（emg_score < 1）
+    # 面部 EMG 宽带平坦，beta_high ≈ beta_low（emg_score > 1.5）
+    mask_bl = (freqs >= _BETA_LOW[0])  & (freqs <= _BETA_LOW[1])
+    mask_bh = (freqs >= _BETA_HIGH[0]) & (freqs <= _BETA_HIGH[1])
+    beta_low_p  = float(np.trapz(psd[mask_bl], freqs[mask_bl])) if mask_bl.any() else 0.0
+    beta_high_p = float(np.trapz(psd[mask_bh], freqs[mask_bh])) if mask_bh.any() else 0.0
+    emg_score = beta_high_p / (beta_low_p + _EPS)
+    # weight: emg_score < 1.5 → 1.0（全保留），emg_score = 3.0 → 0.0（只保留 beta_low）
+    weight = float(np.clip(1.0 - (emg_score - 1.5) / 1.5, 0.0, 1.0))
+    feat[f"{p}_beta_power"] = beta_low_p + weight * beta_high_p
+    band_powers["beta"] = feat[f"{p}_beta_power"]
 
     # 各频段相对功率
     total = sum(band_powers.values())
